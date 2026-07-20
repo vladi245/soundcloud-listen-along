@@ -369,6 +369,7 @@ export class Room implements DurableObject {
       type: 'joined',
       role,
       participantCount,
+      serverTime: Date.now(),
       ...(room.snapshot ? { state: room.snapshot } : {}),
     });
     this.broadcast({ type: 'presence', participantCount });

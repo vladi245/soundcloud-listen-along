@@ -28,6 +28,7 @@ export type ServerMessage =
       type: 'joined';
       role: Role;
       participantCount: number;
+      serverTime: number;
       state?: PlaybackState;
     }
   | { type: 'playback'; state: PlaybackState; serverTime: number }
@@ -117,10 +118,66 @@ export function parseClientMessage(value: unknown): ClientMessage | null {
   return null;
 }
 
+export function parseServerMessage(value: unknown): ServerMessage | null {
+  if (!isRecord(value) || typeof value.type !== 'string') return null;
+
+  if (
+    value.type === 'joined' &&
+    (value.role === 'host' || value.role === 'guest') &&
+    isCount(value.participantCount) &&
+    isNonNegativeFinite(value.serverTime) &&
+    (value.state === undefined || isPlaybackState(value.state))
+  ) {
+    return value as unknown as ServerMessage;
+  }
+  if (
+    value.type === 'playback' &&
+    isPlaybackState(value.state) &&
+    isNonNegativeFinite(value.serverTime)
+  ) {
+    return {
+      type: 'playback',
+      state: value.state,
+      serverTime: value.serverTime,
+    };
+  }
+  if (value.type === 'presence' && isCount(value.participantCount)) {
+    return { type: 'presence', participantCount: value.participantCount };
+  }
+  if (
+    value.type === 'pong' &&
+    isNonNegativeFinite(value.sentAt) &&
+    isNonNegativeFinite(value.serverTime)
+  ) {
+    return { type: 'pong', sentAt: value.sentAt, serverTime: value.serverTime };
+  }
+  if (
+    value.type === 'error' &&
+    isShortString(value.code) &&
+    isShortString(value.message)
+  ) {
+    return { type: 'error', code: value.code, message: value.message };
+  }
+  if (value.type === 'room-closed' && isShortString(value.reason)) {
+    return { type: 'room-closed', reason: value.reason };
+  }
+  return null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isNonNegativeFinite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function isCount(value: unknown): value is number {
+  return (
+    Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 25
+  );
+}
+
+function isShortString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 160;
 }

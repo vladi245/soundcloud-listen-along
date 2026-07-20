@@ -4,6 +4,7 @@ import {
   isSoundCloudUrl,
   normalizeRoomCode,
   parseClientMessage,
+  parseServerMessage,
   PROTOCOL_VERSION,
 } from './protocol';
 
@@ -56,6 +57,20 @@ describe('protocol validation', () => {
         roomCode: 'short',
         participantId: 'abcdefghijklmnopqrstuv',
       }),
+    ).toBeNull();
+  });
+
+  it('validates server messages', () => {
+    expect(
+      parseServerMessage({
+        type: 'joined',
+        role: 'guest',
+        participantCount: 2,
+        serverTime: 100,
+      }),
+    ).toMatchObject({ type: 'joined', role: 'guest' });
+    expect(
+      parseServerMessage({ type: 'presence', participantCount: 26 }),
     ).toBeNull();
   });
 });
