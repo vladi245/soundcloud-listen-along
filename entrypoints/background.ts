@@ -281,13 +281,18 @@ export default defineBackground(() => {
             ? { Authorization: `Bearer ${session.creationKey}` }
             : undefined,
         });
-        const result = (await response.json()) as Record<string, unknown>;
+        const result: unknown = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(
+            backendError(result) ?? `Room creation failed (${response.status})`,
+          );
+        }
         if (
-          !response.ok ||
+          !isRecord(result) ||
           !isRoomCode(result.roomCode) ||
           !isOpaqueId(result.hostToken)
         ) {
-          throw new Error('Room creation failed');
+          throw new Error('Backend returned an invalid room');
         }
         await startRoom(request.tabId, result.roomCode, result.hostToken);
       } else if (request.type === 'join-room') {
@@ -347,3 +352,15 @@ export default defineBackground(() => {
   browser.runtime.onMessage.addListener(handleMessage);
   void load().then(connect);
 });
+
+function backendError(value: unknown): string | null {
+  if (!isRecord(value)) return null;
+  const error = value.error;
+  if (!isRecord(error)) return null;
+  const message = error.message;
+  return typeof message === 'string' ? message : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

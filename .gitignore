@@ -12,6 +12,7 @@ node_modules
 stats.html
 stats-*.json
 .wxt
+.wrangler
 coverage
 web-ext.config.ts
 .dev.vars
