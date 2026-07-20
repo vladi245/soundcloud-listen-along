@@ -37,6 +37,16 @@ Values are trimmed and compared as exact strings. Wildcards are not supported. A
 
 This setting is an origin filter, not participant authentication. Guests are admitted by possession of a room code, and host authority is granted by possession of the host token. Do not publish active credentials.
 
+## Room creation key
+
+The Worker requires an operator-defined secret before it creates rooms. From `server/`, set it without writing it to the repository:
+
+```sh
+npx wrangler secret put ROOM_CREATION_KEY
+```
+
+Give this key only to people allowed to host. They enter it with the backend origin in the extension. Guests configure the same origin but leave the creation-key field empty. The key is held in browser session storage and sent only when creating a room.
+
 ## Deploy
 
 From `server/`:
@@ -58,7 +68,7 @@ The extension requires the exact printed origin: scheme and host only, with no p
 ## Configure the extension
 
 1. Build and install the extension as described in the repository README.
-2. Open the popup and enter the deployed Worker origin.
+2. Open the popup and enter the deployed Worker origin. Hosts also enter the room creation key.
 3. Grant the optional browser permission for that origin.
 4. Open a SoundCloud track, review the transmission notice, and create or join a room.
 5. Give participants both the backend origin and room code. Participants must configure the same backend origin.
@@ -72,8 +82,11 @@ Install server dependencies and start Wrangler:
 ```sh
 cd server
 npm install
+cp .dev.vars.example .dev.vars
 npm run dev
 ```
+
+Replace the example value in `.dev.vars` before starting the server. This file is ignored by Git.
 
 Use the local origin printed by Wrangler, normally `http://localhost:8787`, in the extension popup. Keep the Wrangler process running while testing. The local Worker uses the same routes, Durable Object binding, and migration configuration as deployment.
 

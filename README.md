@@ -58,7 +58,7 @@ The room server is a Cloudflare Worker backed by one Durable Object per room. De
 
 After deployment:
 
-1. Open the extension popup and enter the exact Worker origin printed by Wrangler, for example `https://soundcloud-listen-along-server.example.workers.dev`.
+1. Open the extension popup and enter the exact Worker origin printed by Wrangler, for example `https://soundcloud-listen-along-server.example.workers.dev`. Hosts also enter the operator's room creation key.
 2. Grant the requested optional permission for that origin.
 3. Open a SoundCloud track and accept the transmission notice.
 4. Create a room and share its code, or join a code from another participant using the same backend origin.

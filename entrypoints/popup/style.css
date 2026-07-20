@@ -133,6 +133,15 @@ label {
   font-weight: 650;
 }
 
+label:not(:first-child) {
+  margin-top: 0.8rem;
+}
+
+.optional {
+  color: #7f867c;
+  font-weight: 400;
+}
+
 input {
   box-sizing: border-box;
   width: 100%;

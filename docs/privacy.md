@@ -22,6 +22,7 @@ The extension stores in browser session storage:
 
 - the selected backend URL;
 - room and participant identifiers and a host token when hosting;
+- the operator-provided room creation key when configured;
 - transient connection and synchronization state.
 
 Room session data is removed when the user leaves and when the browser session ends. The selected backend URL remains available only for that browser session.

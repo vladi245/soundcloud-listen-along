@@ -35,6 +35,7 @@ export type RuntimeMessage =
       namespace: typeof MESSAGE_NAMESPACE;
       type: 'configure-backend';
       backendUrl: string;
+      creationKey: string;
     }
   | {
       namespace: typeof MESSAGE_NAMESPACE;
@@ -80,7 +81,11 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
         value.code === 'player_unavailable' || value.code === 'autoplay_blocked'
       );
     case 'configure-backend':
-      return typeof value.backendUrl === 'string';
+      return (
+        typeof value.backendUrl === 'string' &&
+        typeof value.creationKey === 'string' &&
+        value.creationKey.length <= 128
+      );
     case 'create-room':
       return Number.isInteger(value.tabId) && Number(value.tabId) >= 0;
     case 'join-room':

@@ -20,6 +20,7 @@ const ROOM_KEY = 'room';
 interface Env {
   ROOMS: DurableObjectNamespace;
   ALLOWED_ORIGINS?: string;
+  ROOM_CREATION_KEY?: string;
 }
 
 interface RoomRecord {
@@ -114,9 +115,30 @@ export default {
         origin,
       );
 
+    if (request.method === 'OPTIONS') {
+      return emptyResponse(204, origin, {
+        'Access-Control-Allow-Headers': 'Authorization',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      });
+    }
+
     if (url.pathname === '/rooms') {
       if (request.method !== 'POST') {
         return methodNotAllowed('POST', origin);
+      }
+      if (!env.ROOM_CREATION_KEY) {
+        return jsonError(
+          503,
+          'server_not_configured',
+          'Room creation is not configured',
+          origin,
+        );
+      }
+      const suppliedKey = request.headers
+        .get('Authorization')
+        ?.replace(/^Bearer /, '');
+      if (!suppliedKey || !safeEqual(suppliedKey, env.ROOM_CREATION_KEY)) {
+        return jsonError(401, 'unauthorized', 'Room creation denied', origin);
       }
       if (
         request.body !== null &&
@@ -619,11 +641,25 @@ function jsonResponse(
   return new Response(JSON.stringify(body), { status, headers });
 }
 
-function emptyResponse(status: number, origin?: string): Response {
-  const headers = new Headers(securityHeaders);
+function emptyResponse(
+  status: number,
+  origin?: string,
+  extraHeaders: Record<string, string> = {},
+): Response {
+  const headers = new Headers({ ...securityHeaders, ...extraHeaders });
   if (origin) {
     headers.set('Access-Control-Allow-Origin', origin);
     headers.append('Vary', 'Origin');
   }
   return new Response(null, { status, headers });
+}
+
+function safeEqual(left: string, right: string): boolean {
+  const length = Math.max(left.length, right.length);
+  let difference = left.length ^ right.length;
+  for (let index = 0; index < length; index += 1) {
+    difference |=
+      (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0);
+  }
+  return difference === 0;
 }
