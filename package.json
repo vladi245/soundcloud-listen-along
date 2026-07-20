@@ -12,6 +12,7 @@
     "dev:firefox": "wxt -b firefox --mv3",
     "build": "wxt build",
     "build:firefox": "wxt build -b firefox --mv3",
+    "build:all": "npm run build && npm run build:firefox && npm run validate:manifests",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox --mv3",
     "format": "prettier --write .",
@@ -21,6 +22,8 @@
     "typecheck": "tsc --noEmit",
     "server:check": "npm --prefix server run typecheck && npm --prefix server test",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run server:check",
+    "validate:manifests": "node scripts/validate-manifests.mjs",
+    "release:package": "npm run check && npm run build:all && npm run zip && npm run zip:firefox",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {

@@ -47,3 +47,7 @@ The manifest requires Firefox 140 or newer and declares `authenticationInfo`, `b
 The extension is intended to synchronize playback state between participants in a private room hosted on a backend selected by those participants. It does not download or redistribute audio and does not provide a public central service. The content script is limited to SoundCloud pages to read and apply supported playback state; the background worker coordinates extension state and the selected backend; `storage` retains user-selected configuration and session state. This explanation must be revised to match the final implementation before submission.
 
 Unlisted signing limits public AMO discovery; it does not waive Mozilla policies or review requirements. A signed artifact should be distributed only with the applicable privacy notice, source revision, checksum, and installation instructions.
+
+## Packaging
+
+Run `npm run release:package` from a clean checkout. WXT creates the unsigned Firefox package and its matching source archive in `.output/`. Submit both to AMO for unlisted signing. Do not publish the unsigned Firefox ZIP as an installable release.
