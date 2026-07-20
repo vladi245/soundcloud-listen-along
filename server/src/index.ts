@@ -165,6 +165,16 @@ export default {
       );
     }
 
+    const roomMatch = /^\/rooms\/([0-9A-HJKMNP-TV-Z]{16})$/.exec(url.pathname);
+    if (roomMatch) {
+      if (request.method !== 'GET') return methodNotAllowed('GET', origin);
+      const stub = env.ROOMS.get(env.ROOMS.idFromName(roomMatch[1]));
+      const result = await stub.fetch('https://room.internal/exists');
+      return result.ok
+        ? emptyResponse(204, origin)
+        : jsonError(404, 'room_not_found', 'Room not found', origin);
+    }
+
     const socketMatch = /^\/rooms\/([0-9A-HJKMNP-TV-Z]{16})\/socket$/.exec(
       url.pathname,
     );
@@ -221,6 +231,10 @@ export class Room implements DurableObject {
     }
 
     if (url.pathname !== '/socket' || request.method !== 'GET') {
+      if (url.pathname === '/exists' && request.method === 'GET') {
+        const room = await this.state.storage.get<RoomRecord>(ROOM_KEY);
+        return new Response(null, { status: room ? 204 : 404 });
+      }
       return jsonError(404, 'not_found', 'Route not found');
     }
     const room = await this.state.storage.get<RoomRecord>(ROOM_KEY);
@@ -228,10 +242,6 @@ export class Room implements DurableObject {
     if (!room || !isRoomCode(roomCode)) {
       return jsonError(404, 'room_not_found', 'Room not found');
     }
-    if (this.state.getWebSockets().length >= MAX_SOCKETS) {
-      return jsonError(429, 'room_full', 'Room is full');
-    }
-
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
@@ -347,6 +357,10 @@ export class Room implements DurableObject {
       return;
     }
     const role: Role = message.hostToken === room.hostToken ? 'host' : 'guest';
+    if (this.participantCount() >= MAX_SOCKETS) {
+      this.rejectSocket(ws, 'room_full', 'Room is full');
+      return;
+    }
     if (role === 'host' && this.hasJoinedHost()) {
       this.rejectSocket(ws, 'host_connected', 'Host is already connected');
       return;
@@ -603,4 +617,13 @@ function jsonResponse(
     headers.append('Vary', 'Origin');
   }
   return new Response(JSON.stringify(body), { status, headers });
+}
+
+function emptyResponse(status: number, origin?: string): Response {
+  const headers = new Headers(securityHeaders);
+  if (origin) {
+    headers.set('Access-Control-Allow-Origin', origin);
+    headers.append('Vary', 'Origin');
+  }
+  return new Response(null, { status, headers });
 }

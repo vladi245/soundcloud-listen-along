@@ -66,9 +66,15 @@ function renderBackendForm(error?: string): void {
         notice.textContent = 'Use HTTPS, or HTTP on localhost for development.';
         return;
       }
-      const granted = await browser.permissions.request({
-        origins: [backendPermission(backendUrl)],
-      });
+      let granted: boolean;
+      try {
+        granted = await browser.permissions.request({
+          origins: [backendPermission(backendUrl)],
+        });
+      } catch {
+        notice.textContent = 'This backend origin cannot be permitted.';
+        return;
+      }
       if (!granted) {
         notice.textContent = 'Backend access was not granted.';
         return;

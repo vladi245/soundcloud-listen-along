@@ -63,7 +63,7 @@ The extension requires the exact printed origin: scheme and host only, with no p
 4. Open a SoundCloud track, review the transmission notice, and create or join a room.
 5. Give participants both the backend origin and room code. Participants must configure the same backend origin.
 
-The extension accepts HTTPS origins in normal use. It accepts HTTP only on `localhost`, `127.0.0.1`, and `[::1]` for development.
+The extension accepts HTTPS origins in normal use. It accepts HTTP only on `localhost` and `127.0.0.1` for development.
 
 ## Local development
 
