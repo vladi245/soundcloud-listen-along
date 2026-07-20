@@ -1,3 +1,3 @@
 export default defineBackground(() => {
-  console.log('Hello background!', { id: browser.runtime.id });
+  // Room lifecycle and tab coordination are registered here in later milestones.
 });
