@@ -49,6 +49,8 @@ function renderBackendForm(error?: string): void {
       <form id="backend-form">
         <label for="backend">Backend origin</label>
         <input id="backend" name="backend" type="url" placeholder="https://rooms.example.com" autocomplete="url" required>
+        <label for="creation-key">Room creation key <span class="optional">Optional for guests</span></label>
+        <input id="creation-key" name="creation-key" type="password" maxlength="128" autocomplete="off">
         <button class="primary" type="submit">Save backend</button>
       </form>
       <p id="notice" class="notice" role="status"></p>
@@ -61,6 +63,8 @@ function renderBackendForm(error?: string): void {
     .addEventListener('submit', async (event) => {
       event.preventDefault();
       const input = document.querySelector<HTMLInputElement>('#backend')!;
+      const keyInput =
+        document.querySelector<HTMLInputElement>('#creation-key')!;
       const backendUrl = normalizeBackendUrl(input.value);
       if (!backendUrl) {
         notice.textContent = 'Use HTTPS, or HTTP on localhost for development.';
@@ -79,7 +83,11 @@ function renderBackendForm(error?: string): void {
         notice.textContent = 'Backend access was not granted.';
         return;
       }
-      const response = await send({ type: 'configure-backend', backendUrl });
+      const response = await send({
+        type: 'configure-backend',
+        backendUrl,
+        creationKey: keyInput.value,
+      });
       currentState = response.state;
       render();
     });

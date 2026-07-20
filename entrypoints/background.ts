@@ -24,6 +24,7 @@ interface Session {
   tabId?: number;
   participantId?: string;
   hostToken?: string;
+  creationKey?: string;
   lastPlayback?: PlaybackState;
   sequence: number;
   serverOffset: number;
@@ -82,6 +83,7 @@ export default defineBackground(() => {
   const clearRoom = async (error?: string) => {
     stopSocket();
     const backendUrl = session.public.backendUrl;
+    const creationKey = session.creationKey;
     session = {
       public: {
         ...idleState,
@@ -90,6 +92,7 @@ export default defineBackground(() => {
       },
       sequence: 0,
       serverOffset: 0,
+      ...(creationKey ? { creationKey } : {}),
     };
     await save();
   };
@@ -266,11 +269,18 @@ export default defineBackground(() => {
         const backendUrl = normalizeBackendUrl(request.backendUrl);
         if (!backendUrl) throw new Error('Enter a secure backend origin');
         await clearRoom();
+        session.creationKey = request.creationKey || undefined;
+        await save();
         await setPublic({ backendUrl });
       } else if (request.type === 'create-room') {
         const backendUrl = session.public.backendUrl;
         if (!backendUrl) throw new Error('Configure a backend first');
-        const response = await fetch(`${backendUrl}/rooms`, { method: 'POST' });
+        const response = await fetch(`${backendUrl}/rooms`, {
+          method: 'POST',
+          headers: session.creationKey
+            ? { Authorization: `Bearer ${session.creationKey}` }
+            : undefined,
+        });
         const result = (await response.json()) as Record<string, unknown>;
         if (
           !response.ok ||

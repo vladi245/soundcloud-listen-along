@@ -5,6 +5,7 @@ import {
   createRoomCode,
   isStrictClientMessage,
 } from './index';
+import worker from './index';
 
 describe('credential generation', () => {
   it('maps bytes to a 16-character Crockford code', () => {
@@ -53,5 +54,28 @@ describe('strict message validation', () => {
         },
       }),
     ).toBe(false);
+  });
+});
+
+describe('room creation authorization', () => {
+  const rooms = {} as DurableObjectNamespace;
+
+  it('requires server configuration', async () => {
+    const response = await worker.fetch(
+      new Request('https://rooms.example/rooms', { method: 'POST' }),
+      { ROOMS: rooms },
+    );
+    expect(response.status).toBe(503);
+  });
+
+  it('rejects an invalid creation key', async () => {
+    const response = await worker.fetch(
+      new Request('https://rooms.example/rooms', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer wrong-key' },
+      }),
+      { ROOMS: rooms, ROOM_CREATION_KEY: 'correct-key' },
+    );
+    expect(response.status).toBe(401);
   });
 });
