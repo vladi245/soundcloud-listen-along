@@ -1,8 +1,11 @@
 import { message, isRuntimeMessage } from '@/lib/messages';
 import {
+  activatePageTrack,
+  activeTrackUrl,
   applyPlaybackState,
   findPlayer,
   readPlaybackState,
+  trackPageUrl,
 } from '@/lib/player';
 
 export default defineContentScript({
@@ -14,8 +17,9 @@ export default defineContentScript({
 
     const publishState = () => {
       if (Date.now() < suppressEventsUntil) return;
+      const trackUrl = activeTrackUrl(document);
       const state = player
-        ? readPlaybackState(player, location.href, sequence++, Date.now())
+        ? readPlaybackState(player, trackUrl ?? '', sequence++, Date.now())
         : null;
       if (state) {
         void browser.runtime
@@ -41,28 +45,47 @@ export default defineContentScript({
       }
     };
 
-    browser.runtime.onMessage.addListener((request: unknown) => {
-      if (!isRuntimeMessage(request) || request.type !== 'apply-playback')
-        return;
+    const applyRemoteState = async (
+      state: Parameters<typeof applyPlaybackState>[2],
+      activationAttempted = false,
+    ) => {
       attachPlayer();
       if (!player) {
-        return browser.runtime.sendMessage(
+        await browser.runtime.sendMessage(
           message({ type: 'player-error', code: 'player_unavailable' }),
         );
+        return;
+      }
+
+      const activeUrl = activeTrackUrl(document);
+      if (activeUrl !== state.trackUrl) {
+        if (trackPageUrl(location.href) !== state.trackUrl) {
+          location.assign(state.trackUrl);
+          return;
+        }
+        if (!activationAttempted && activatePageTrack(document)) {
+          setTimeout(() => void applyRemoteState(state, true), 750);
+          return;
+        }
+        await browser.runtime.sendMessage(
+          message({ type: 'player-error', code: 'player_unavailable' }),
+        );
+        return;
       }
 
       suppressEventsUntil = Date.now() + 750;
-      return applyPlaybackState(player, location.href, request.state).then(
-        (result) => {
-          if (result.navigationUrl) {
-            location.assign(result.navigationUrl);
-          } else if (result.autoplayBlocked) {
-            return browser.runtime.sendMessage(
-              message({ type: 'player-error', code: 'autoplay_blocked' }),
-            );
-          }
-        },
-      );
+      const result = await applyPlaybackState(player, activeUrl, state);
+      if (result.autoplayBlocked) {
+        await browser.runtime.sendMessage(
+          message({ type: 'player-error', code: 'autoplay_blocked' }),
+        );
+      }
+    };
+
+    browser.runtime.onMessage.addListener((request: unknown) => {
+      if (!isRuntimeMessage(request) || request.type !== 'apply-playback')
+        return;
+      return applyRemoteState(request.state);
     });
 
     attachPlayer();

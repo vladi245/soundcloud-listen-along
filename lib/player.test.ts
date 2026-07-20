@@ -4,6 +4,7 @@ import {
   applyPlaybackState,
   canonicalTrackUrl,
   readPlaybackState,
+  trackPageUrl,
 } from './player';
 
 function audio(overrides: Partial<HTMLAudioElement> = {}): HTMLAudioElement {
@@ -31,6 +32,16 @@ describe('SoundCloud player adapter', () => {
     expect(
       canonicalTrackUrl('https://soundcloud.com/artist/track?si=abc#comments'),
     ).toBe('https://soundcloud.com/artist/track');
+  });
+
+  it('accepts track permalinks but not browsing pages', () => {
+    expect(trackPageUrl('https://soundcloud.com/artist/track')).toBe(
+      'https://soundcloud.com/artist/track',
+    );
+    expect(trackPageUrl('https://soundcloud.com/discover')).toBeNull();
+    expect(
+      trackPageUrl('https://soundcloud.com/artist/sets/playlist'),
+    ).toBeNull();
   });
 
   it('reads playback without page metadata', () => {
