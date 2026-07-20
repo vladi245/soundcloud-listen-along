@@ -67,11 +67,45 @@ Use HTTPS for deployed backends. HTTP is accepted only for `localhost` and `127.
 
 ## Architecture
 
-```text
-popup --------------------+
-                          v
-SoundCloud page <-> content script <-> background worker <-> Cloudflare Worker
-                                                        <-> room Durable Object
+```mermaid
+flowchart LR
+    user([Listener])
+
+    subgraph browser[Participant browser]
+        popup[Extension popup]
+        background[Background worker]
+
+        subgraph tab[SoundCloud tab]
+            page[SoundCloud page]
+            content[Content script]
+            player[Native audio player]
+        end
+
+        popup -->|Room commands| background
+        content -->|Validated local playback| background
+        background -->|Validated remote playback| content
+        content <-->|Observe and control| player
+        page -->|Streams audio| player
+    end
+
+    subgraph operator[Self-hosting operator]
+        worker[Cloudflare Worker]
+        room[Room Durable Object]
+        state[(Current snapshot)]
+
+        worker -->|Route by room code| room
+        room -->|Ephemeral state| state
+    end
+
+    user --> popup
+    user --> page
+    background -->|HTTPS room creation| worker
+    background <-->|WSS room protocol| worker
+
+    classDef extension fill:#1f231d,stroke:#bdf56f,color:#f6f3ea
+    classDef service fill:#242822,stroke:#9ca396,color:#f6f3ea
+    class popup,background,content extension
+    class worker,room,state service
 ```
 
 The content script observes SoundCloud's audio element and applies guest playback changes. The background worker owns session state, backend access, WebSocket reconnection, and protocol validation. The Worker creates rooms and routes each room to a Durable Object, which validates participants, grants control only to the host token holder, stores the latest playback snapshot, and broadcasts room state.
