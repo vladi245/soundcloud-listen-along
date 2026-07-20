@@ -1,5 +1,5 @@
 <div align="center">
-  <pre>LISTEN  / /  ALONG</pre>
+  <img src="docs/header.svg" alt="Listen Along - synchronized rooms, independent streams" width="100%">
   <h1>SoundCloud Listen Along</h1>
   <p>An unofficial browser extension for synchronized listening through your own room server.</p>
   <p><code>MVP IMPLEMENTED</code> &nbsp; <code>SELF-HOSTED ONLY</code> &nbsp; <code>NO CENTRAL SERVICE</code></p>
