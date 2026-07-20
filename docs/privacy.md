@@ -6,6 +6,8 @@ This document describes the open-source extension and its self-hosted room desig
 
 The content script runs only on `https://soundcloud.com/*` and `https://*.soundcloud.com/*`. After a user explicitly creates or joins a room, the extension sends room and playback messages to that user's configured backend. The implemented backend is a Cloudflare Worker deployed under a self-hosting operator's account. The project contains no analytics or advertising integration and sends nothing to a service operated by the extension maintainers.
 
+The extension is disabled in private browsing so room and playback state cannot cross private and regular browser contexts.
+
 Visiting SoundCloud remains subject to SoundCloud's own data practices. The browser, extension development tools, package registry, Cloudflare, and each operator deployment may have separate practices.
 
 ## Roles
