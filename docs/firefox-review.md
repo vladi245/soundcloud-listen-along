@@ -20,19 +20,19 @@ The unpacked build is written to `.output/firefox-mv3/`; the zip command writes 
 - Extension ID: `soundcloud-listen-along@vladi245.github.io`
 - Permissions: `activeTab`, `storage`
 - Content-script matches: `https://soundcloud.com/*`, `https://*.soundcloud.com/*`
-- Background worker: present but empty
-- Content script: present but empty
+- Background worker: manages one room session and the configured backend
+- Content script: reads and applies native audio playback state
 - Remote code: none in project source
 - Analytics or advertising: none in project source
-- Backend communication: not implemented
+- Backend communication: HTTPS room creation and WSS room synchronization
 
-The build currently warns that new Firefox submissions require `data_collection_permissions`. The manifest and review disclosures must be updated consistently before an AMO submission; this documentation does not substitute for that metadata.
+The manifest requires Firefox 140 or newer and declares `authenticationInfo`, `browsingActivity`, `personallyIdentifyingInfo`, and `websiteActivity`. These cover the host token, track URL, ephemeral room identifiers, and playback actions required by synchronization.
 
 ## Planned submission checklist
 
 - Finish and document the behavior being submitted.
 - Confirm the stable extension ID, version, and Manifest V3 support requirements.
-- Declare data collection or non-collection in the manifest and AMO forms exactly as implemented.
+- Keep manifest and AMO data declarations aligned with the implementation.
 - Justify `activeTab`, `storage`, and SoundCloud host matching in reviewer notes.
 - Remove unused permissions and ensure user-facing controls match the declarations.
 - Confirm that all executable code is packaged locally and reproducible from source.
