@@ -6,7 +6,11 @@ export default defineConfig({
     description:
       'Synchronize SoundCloud playback in self-hosted, private rooms.',
     permissions: ['activeTab', 'storage'],
-    optional_host_permissions: ['https://*/*', 'http://localhost/*'],
+    optional_host_permissions: [
+      'https://*/*',
+      'http://localhost/*',
+      'http://127.0.0.1/*',
+    ],
     browser_specific_settings: {
       gecko: {
         id: 'soundcloud-listen-along@vladi245.github.io',
