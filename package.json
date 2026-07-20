@@ -19,7 +19,8 @@
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
+    "server:check": "npm --prefix server run typecheck && npm --prefix server test",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run server:check",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
