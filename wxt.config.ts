@@ -5,6 +5,7 @@ export default defineConfig({
     name: 'SoundCloud Listen Along (Unofficial)',
     description:
       'Synchronize SoundCloud playback in self-hosted, private rooms.',
+    incognito: 'not_allowed',
     permissions: ['activeTab', 'storage'],
     optional_host_permissions: [
       'https://*/*',

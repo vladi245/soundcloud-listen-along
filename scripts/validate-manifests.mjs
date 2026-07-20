@@ -10,6 +10,10 @@ for (const [browser, value] of [
 ]) {
   assert(value.manifest_version === 3, `${browser} must use Manifest V3`);
   assert(
+    value.incognito === 'not_allowed',
+    `${browser} must exclude private browsing`,
+  );
+  assert(
     sameValues(value.permissions, ['activeTab', 'storage']),
     `${browser} has unexpected required permissions`,
   );
