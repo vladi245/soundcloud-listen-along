@@ -4,9 +4,9 @@
 
 This document describes the open-source extension and its self-hosted room design. It is not a privacy policy for SoundCloud or for any independently operated backend.
 
-The content script runs only on `https://soundcloud.com/*` and `https://*.soundcloud.com/*`. After a user explicitly creates or joins a room, the extension sends room and playback messages to that user's configured backend. The project contains no analytics or advertising integration and sends nothing to a service operated by the extension maintainers.
+The content script runs only on `https://soundcloud.com/*` and `https://*.soundcloud.com/*`. After a user explicitly creates or joins a room, the extension sends room and playback messages to that user's configured backend. The implemented backend is a Cloudflare Worker deployed under a self-hosting operator's account. The project contains no analytics or advertising integration and sends nothing to a service operated by the extension maintainers.
 
-Visiting SoundCloud remains subject to SoundCloud's own data practices. The browser, extension development tools, package registry, and a future backend may have separate practices.
+Visiting SoundCloud remains subject to SoundCloud's own data practices. The browser, extension development tools, package registry, Cloudflare, and each operator deployment may have separate practices.
 
 ## Roles
 
@@ -32,17 +32,17 @@ The extension/backend protocol processes:
 - ephemeral participant identifier, presence, and role;
 - current SoundCloud page URL;
 - playback state, including playing or paused state and position;
-- event and synchronization timestamps, sequence information, and control events such as seek, play, pause, or track change;
+- event and synchronization timestamps, sequence information, and playback changes such as seek, play, pause, or track change;
 - connection/session metadata needed to join and reconnect;
 - protocol version and error information needed for interoperability.
 
-A backend host or network provider may also observe IP addresses, connection times, user-agent or protocol metadata, and operational logs. Whether these are retained is controlled by the backend operator and hosting stack.
+The Durable Object stores the room code, host token, activity and host-presence timestamps, and latest playback snapshot. It deletes application room storage after six hours of inactivity or, once the host has joined, one minute after the host disconnects without returning. Cloudflare and network providers may also observe IP addresses, connection times, user-agent or protocol metadata, and operational logs. Their retention is controlled by the backend operator and hosting stack rather than this application cleanup.
 
 ## Exclusions and minimization
 
 The design does not require the extension to send SoundCloud passwords, authentication cookies, private messages, contact lists, or audio content to a room backend. Implementations should not collect them. Playback messages should contain only what is necessary to identify and synchronize the selected public or user-accessible track.
 
-The project should avoid telemetry by default, use narrow browser permissions, encrypt backend transport with TLS in non-local deployments, expose clear room-leave and local-data deletion controls, and document retention before a usable release.
+The extension has no telemetry, requests backend access as an optional per-origin permission, requires TLS except for local development, and exposes a room-leave control. Operators remain responsible for platform logging and retention disclosures.
 
 ## Operator checklist
 
