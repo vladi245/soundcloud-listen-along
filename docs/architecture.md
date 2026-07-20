@@ -2,39 +2,60 @@
 
 ## Status
 
-Only the browser-extension scaffold exists today. The popup renders a milestone notice, the background worker is empty, and the SoundCloud-matched content script performs no work. No backend implementation or wire protocol is present in this repository.
+The MVP includes the browser extension, shared protocol and synchronization modules, and a self-hosted Cloudflare Worker with Durable Objects. It supports room creation, host and guest admission, host-authoritative playback synchronization, presence, heartbeat timing, reconnection, and room expiration.
 
-Everything below marked "planned" is design direction, not shipped behavior or a compatibility guarantee.
+This is an early implementation, not a stable protocol or production-readiness claim. It depends on SoundCloud's current page audio element and browser autoplay behavior.
 
-## Planned components
+## Components
 
-| Component         | Responsibility                                                                           | Trust boundary        |
-| ----------------- | ---------------------------------------------------------------------------------------- | --------------------- |
-| Popup             | Configure a backend, create or join a room, and show connection state                    | Extension UI          |
-| Content script    | Observe supported player state and apply authorized remote playback changes              | SoundCloud page       |
-| Background worker | Own room lifecycle, validate messages, coordinate tabs, and communicate with the backend | Browser extension     |
-| Room backend      | Authenticate or admit participants, order room events, and relay current state           | Self-hosting operator |
+| Component           | Implemented responsibility                                                                                                                                         | Trust boundary        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- |
+| Popup               | Requests backend-origin permission, records transmission consent, configures the backend, creates or joins a room, and shows room state                            | Extension UI          |
+| Content script      | Finds the SoundCloud audio element, reports local playback, navigates guests to the host track, and applies play, pause, and seek state                            | SoundCloud page       |
+| Background worker   | Stores the active session, creates participant IDs, owns the WebSocket, validates messages, reconnects, estimates clock offset, and coordinates one SoundCloud tab | Browser extension     |
+| Cloudflare Worker   | Applies origin policy, creates room credentials, validates public routes, and routes room sockets to Durable Objects                                               | Self-hosting operator |
+| Room Durable Object | Admits participants, enforces host authority and ordering, stores the latest room snapshot, broadcasts state and presence, and expires the room                    | Cloudflare account    |
 
 ```text
 popup --------------------+
                           v
-SoundCloud page <-> content script <-> background worker <-> operator backend
+SoundCloud page <-> content script <-> background worker
+                                               |
+                                      HTTPS + WebSocket
+                                               |
+                                      Cloudflare Worker
+                                               |
+                                      room Durable Object
 ```
 
-The content script should receive the minimum control surface required for synchronization. Page-derived messages must be treated as untrusted at the extension boundary. Backend messages must be authenticated where the selected deployment supports authentication, schema-validated, bounded, and scoped to the active room and tab.
+## Session flow
 
-## Planned state flow
+1. The user enters a backend origin. The popup validates it and requests an optional browser host permission for that origin.
+2. The user opens SoundCloud, accepts the transmission notice, and creates or joins a room.
+3. Room creation sends an empty `POST /rooms`. The Worker returns a random 16-character room code and a 256-bit host token.
+4. The background worker creates an ephemeral participant ID and connects to `GET /rooms/{roomCode}/socket` over WebSocket.
+5. The first socket message must be a versioned `join`. Possession of the host token assigns the host role; all other admitted participants are guests.
+6. The host content script reports track URL, play/pause state, position, and timing. The background worker assigns increasing sequence numbers and sends this state to the room.
+7. The Durable Object accepts playback updates only from the connected host, replaces the latest snapshot, and broadcasts it with server time.
+8. Guest background workers adjust timestamps for estimated clock offset and ask their content scripts to navigate, seek when drift reaches one second, play, or pause.
+9. Heartbeats run every 20 seconds. A closed socket reconnects after two seconds while the room session remains active.
 
-1. A user selects an operator-provided backend and creates or joins a room.
-2. The background worker establishes the room session and tracks connection state.
-3. The active tab reports track and playback changes through the content script.
-4. The backend orders or relays state to room participants.
-5. Each background worker validates incoming state before asking its content script to apply it.
+The extension session is associated with the SoundCloud tab active when the room was created or joined. Guest navigation stays within validated HTTPS SoundCloud URLs. Browser autoplay blocking is surfaced in the popup and may require one user-initiated playback action.
 
-Conflict resolution, host authority, drift correction, reconnection, authentication, and protocol versioning remain undecided. They must be documented before the protocol is considered stable.
+## Protocol and limits
+
+The JSON protocol is version 1 and is defined in `lib/protocol.ts`. The server requires exact client message fields, text frames, and a maximum frame size of 16 KiB. Playback URLs must use HTTPS on `soundcloud.com` or a subdomain, timestamps must be finite and non-negative, and host sequence numbers must increase.
+
+Each room allows at most 25 WebSocket connections and one connected host. The room code is an unlisted locator and the only guest admission credential; it is not a password. The host token controls playback and must not be shared with guests.
+
+## State and retention
+
+The extension stores the selected backend origin, room and participant identifiers, host token, latest playback state, and connection state in `browser.storage.session`. Leaving clears room state while retaining the backend origin for the browser session. Closing the browser session clears session storage according to browser behavior.
+
+The Durable Object stores the room code, host token, activity timestamps, host-presence state, and latest playback snapshot. A room is deleted after six hours without a valid joined message. After a host that has joined disconnects, the room is deleted if no host reconnects within one minute. Room closure removes all Durable Object storage and closes its sockets.
+
+Cloudflare platform logs, metrics, backups, and account retention are outside the application-level cleanup and remain the operator's responsibility.
 
 ## Deployment model
 
-The extension is self-hosted-only by design: users connect to a backend chosen for their group or deployment. The project does not operate a central discovery service, room service, analytics endpoint, or fallback relay. The backend is a planned separate component and is not currently available in this repository.
-
-See [privacy](privacy.md) for expected data boundaries and [compliance](compliance.md) for operator considerations.
+Every operator deploys the Worker and Durable Object in their own Cloudflare account and gives participants that deployment's origin. There is no central project service, account system, room directory, analytics endpoint, or fallback relay. See [deployment](deployment.md), [privacy](privacy.md), and [compliance](compliance.md).

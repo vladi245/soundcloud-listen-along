@@ -1,93 +1,91 @@
 <div align="center">
   <pre>LISTEN  / /  ALONG</pre>
   <h1>SoundCloud Listen Along</h1>
-  <p>An unofficial, self-hosted browser extension for private synchronized listening rooms.</p>
-  <p><code>EARLY DEVELOPMENT</code> &nbsp; <code>SELF-HOSTED ONLY</code> &nbsp; <code>NO CENTRAL SERVICE</code></p>
+  <p>An unofficial browser extension for synchronized listening through your own room server.</p>
+  <p><code>MVP IMPLEMENTED</code> &nbsp; <code>SELF-HOSTED ONLY</code> &nbsp; <code>NO CENTRAL SERVICE</code></p>
 
-[![Project status: early development](https://img.shields.io/badge/status-early_development-C65D28)](https://github.com/vladi245/soundcloud-listen-along)
-[![Chromium: unpacked](https://img.shields.io/badge/Chromium-unpacked-3B6EA8)](#install-in-a-browser)
-[![Firefox: planned](https://img.shields.io/badge/Firefox-unlisted_AMO_planned-7651A8)](docs/firefox-review.md)
+[![Project status: MVP](https://img.shields.io/badge/status-MVP-C65D28)](https://github.com/vladi245/soundcloud-listen-along)
+[![Chromium: unpacked](https://img.shields.io/badge/Chromium-unpacked-3B6EA8)](#browser-installation)
+[![Firefox: development build](https://img.shields.io/badge/Firefox-development_build-7651A8)](#firefox)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2E7D68)](LICENSE)
 </div>
 
 > [!WARNING]
-> This repository is an early scaffold. Room creation, backend connectivity, and playback synchronization are not implemented yet.
+> This is an early MVP, not a production-ready service. Player integration can break when SoundCloud changes its page, and browser autoplay rules may require a guest to start playback once.
 
-## What this is
+## Features
 
-The project is intended to synchronize playback for people who already use SoundCloud, while keeping room infrastructure under the control of a self-hosting operator. It does not provide audio, bypass platform controls, or include a hosted public service.
+- Creates private, unlisted rooms on an operator-deployed Cloudflare Worker.
+- Synchronizes the host's track URL, play/pause state, position, and seeks to guests.
+- Shows host or guest role, participant count, connection state, and a shareable 16-character room code.
+- Reconnects interrupted extension sessions and uses heartbeat timing to estimate server clock offset.
+- Keeps backend selection and room credentials in browser session storage rather than persistent extension storage.
+- Relays synchronization metadata only; audio remains on SoundCloud.
+- Includes protocol validation, message-size and room-capacity limits, host authority, and automatic room cleanup.
 
-Current code provides a Manifest V3 WXT extension shell: a popup, an empty background entry point, and an empty content script limited to SoundCloud pages.
+Current limitations include one host per room, up to 25 WebSocket connections, no room password beyond possession of the room code, no room discovery, and no project-operated backend.
 
-## Setup and build
+## Installation
 
-Requirements: Node.js with npm. The lockfile is authoritative for dependency versions.
+Requirements: Node.js 22 or newer and npm.
 
 ```sh
 git clone https://github.com/vladi245/soundcloud-listen-along.git
 cd soundcloud-listen-along
 npm ci
-npm run typecheck
+npm run check
 npm run build
 ```
 
-Development and distribution commands are the current `package.json` scripts:
+The Chromium build is written to `.output/chrome-mv3/`. Other available commands are `npm run dev`, `npm run dev:firefox`, `npm run build:firefox`, `npm run zip`, and `npm run zip:firefox`.
 
-```sh
-npm run dev
-npm run dev:firefox
-npm run build
-npm run build:firefox
-npm run zip
-npm run zip:firefox
-```
-
-Production builds are written to `.output/chrome-mv3/` and `.output/firefox-mv3/`. Zip commands produce distribution archives under `.output/`.
-
-## Install in a browser
+## Browser installation
 
 ### Chromium
 
-Chromium distribution is currently unpacked only.
-
-1. Run `npm ci && npm run build`.
-2. Open `chrome://extensions` in Chrome, Chromium, Brave, or Edge (`edge://extensions`).
-3. Enable **Developer mode**.
-4. Choose **Load unpacked** and select `.output/chrome-mv3/`.
-
-Unpacked extensions do not update automatically. Rebuild and reload the extension after pulling changes.
+1. Open `chrome://extensions` in Chrome, Chromium, or Brave, or `edge://extensions` in Edge.
+2. Enable **Developer mode**.
+3. Select **Load unpacked** and choose `.output/chrome-mv3/`.
+4. Rebuild and reload the extension after pulling changes; unpacked extensions do not update automatically.
 
 ### Firefox
 
-Firefox support is planned through unlisted AMO signing; it is not currently distributed or represented as review-ready. `npm run build:firefox` creates the development build in `.output/firefox-mv3/`. See [Firefox review notes](docs/firefox-review.md) for the planned submission path and open review work.
+Run `npm run build:firefox`, open `about:debugging#/runtime/this-firefox`, select **Load Temporary Add-on**, and choose `.output/firefox-mv3/manifest.json`. This temporary development installation is removed when Firefox closes. There is no signed Firefox build currently available.
+
+## Self-hosting
+
+The room server is a Cloudflare Worker backed by one Durable Object per room. Deploy it under your own Cloudflare account by following [the deployment guide](docs/deployment.md). The project does not provide a central room service, discovery service, analytics endpoint, or fallback relay.
+
+After deployment:
+
+1. Open the extension popup and enter the exact Worker origin printed by Wrangler, for example `https://soundcloud-listen-along-server.example.workers.dev`.
+2. Grant the requested optional permission for that origin.
+3. Open a SoundCloud track and accept the transmission notice.
+4. Create a room and share its code, or join a code from another participant using the same backend origin.
+
+Use HTTPS for deployed backends. HTTP is accepted only for `localhost`, `127.0.0.1`, and `[::1]` development origins.
 
 ## Architecture
 
 ```text
-SoundCloud tab <-> content script <-> background worker <-> self-hosted room backend
-                                      ^
-                                      |
-                                    popup
+popup --------------------+
+                          v
+SoundCloud page <-> content script <-> background worker <-> Cloudflare Worker
+                                                        <-> room Durable Object
 ```
 
-The extension will observe and apply playback state, while the background worker will own room lifecycle and backend communication. The room backend is planned as a separate, operator-controlled service and is not present in this repository. There is no project-operated central service or fallback relay. See [architecture](docs/architecture.md).
+The content script observes SoundCloud's audio element and applies guest playback changes. The background worker owns session state, backend access, WebSocket reconnection, and protocol validation. The Worker creates rooms and routes each room to a Durable Object, which validates participants, grants control only to the host token holder, stores the latest playback snapshot, and broadcasts room state.
 
-## Privacy and self-hosting
-
-The current scaffold has no room backend integration or project analytics. Future room and playback messages will go to the backend selected by the user or deployment, not to an extension-maintainer service. Backend operators, not extension maintainers, control their own hosting, logs, retention, access, and disclosures.
-
-Planned data categories and trust boundaries are documented in [privacy](docs/privacy.md). Operators should also review [compliance](docs/compliance.md); those notes are not legal advice or legal approval.
+See [architecture](docs/architecture.md), [privacy](docs/privacy.md), and [compliance notes](docs/compliance.md).
 
 ## Contributing and security
 
-- [Contributing guide](CONTRIBUTING.md)
-- [Open an issue](https://github.com/vladi245/soundcloud-listen-along/issues/new/choose)
-- [View pull requests](https://github.com/vladi245/soundcloud-listen-along/pulls)
-- [Report a vulnerability privately](SECURITY.md)
-- [Code of Conduct](CODE_OF_CONDUCT.md)
+- Read the [contributing guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
+- Use [issues](https://github.com/vladi245/soundcloud-listen-along/issues) for bugs and scoped proposals.
+- Report vulnerabilities through the private process in [SECURITY.md](SECURITY.md).
 
-## Unofficial project notice
-
-This is an independent, unofficial project. It is not affiliated with, authorized by, sponsored by, or endorsed by SoundCloud or its affiliates. "SoundCloud" is used only to describe compatibility. No SoundCloud logos, artwork, or other brand marks are included. SoundCloud and related marks belong to their respective owners.
+## License and notice
 
 Released under the [MIT License](LICENSE).
+
+This independent project is not affiliated with, authorized by, sponsored by, or endorsed by SoundCloud or its affiliates. "SoundCloud" is used only to describe compatibility. SoundCloud and related marks belong to their respective owners.
