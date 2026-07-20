@@ -1,0 +1,29 @@
+name: Package release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run release:package
+      - run: sha256sum .output/*.zip > .output/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-release-${{ github.ref_name }}
+          path: |
+            .output/*.zip
+            .output/SHA256SUMS
+          if-no-files-found: error
