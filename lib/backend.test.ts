@@ -17,6 +17,7 @@ describe('backend configuration', () => {
 
   it('rejects insecure remote and path-based URLs', () => {
     expect(normalizeBackendUrl('http://rooms.example.com')).toBeNull();
+    expect(normalizeBackendUrl('http://[::1]:8787')).toBeNull();
     expect(normalizeBackendUrl('https://rooms.example.com/api')).toBeNull();
     expect(normalizeBackendUrl('https://user@rooms.example.com')).toBeNull();
   });

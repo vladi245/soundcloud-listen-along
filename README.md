@@ -63,7 +63,7 @@ After deployment:
 3. Open a SoundCloud track and accept the transmission notice.
 4. Create a room and share its code, or join a code from another participant using the same backend origin.
 
-Use HTTPS for deployed backends. HTTP is accepted only for `localhost`, `127.0.0.1`, and `[::1]` development origins.
+Use HTTPS for deployed backends. HTTP is accepted only for `localhost` and `127.0.0.1` development origins.
 
 ## Architecture
 

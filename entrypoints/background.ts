@@ -45,6 +45,7 @@ export default defineBackground(() => {
   let heartbeat: ReturnType<typeof setInterval> | null = null;
   let loaded = false;
   let reconnect = true;
+  let reconnectAttempts = 0;
 
   const load = async () => {
     if (loaded) return;
@@ -101,6 +102,7 @@ export default defineBackground(() => {
     }
 
     if (incoming.type === 'joined') {
+      reconnectAttempts = 0;
       session.serverOffset = incoming.serverTime - Date.now();
       session.public = {
         ...session.public,
@@ -122,7 +124,6 @@ export default defineBackground(() => {
       return;
     }
     if (incoming.type === 'playback') {
-      session.serverOffset = incoming.serverTime - Date.now();
       session.lastPlayback = {
         ...incoming.state,
         capturedAt: incoming.state.capturedAt - session.serverOffset,
@@ -180,6 +181,7 @@ export default defineBackground(() => {
           ...(session.hostToken ? { hostToken: session.hostToken } : {}),
         }),
       );
+      socket?.send(JSON.stringify({ type: 'ping', sentAt: Date.now() }));
       heartbeat = setInterval(() => {
         if (socket?.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({ type: 'ping', sentAt: Date.now() }));
@@ -199,6 +201,11 @@ export default defineBackground(() => {
       heartbeat = null;
       socket = null;
       if (reconnect && session.public.roomCode) {
+        reconnectAttempts += 1;
+        if (reconnectAttempts > 5) {
+          void clearRoom('Room is unavailable');
+          return;
+        }
         void setPublic({ status: 'connecting' });
         setTimeout(() => void connect(), 2_000);
       }
@@ -213,11 +220,18 @@ export default defineBackground(() => {
     roomCode: string,
     hostToken?: string,
   ) => {
+    const backendUrl = session.public.backendUrl;
+    if (!backendUrl) throw new Error('Configure a backend first');
     const tab = await browser.tabs.get(tabId);
     if (!tab.url || !/^https:\/\/([^.]+\.)?soundcloud\.com\//.test(tab.url)) {
       throw new Error('Open SoundCloud in the active tab first');
     }
+    if (!hostToken) {
+      const response = await fetch(`${backendUrl}/rooms/${roomCode}`);
+      if (!response.ok) throw new Error('Room not found');
+    }
     stopSocket();
+    reconnectAttempts = 0;
     session = {
       public: {
         ...session.public,
