@@ -4,10 +4,10 @@
   <p>An unofficial, self-hosted browser extension for private synchronized listening rooms.</p>
   <p><code>EARLY DEVELOPMENT</code> &nbsp; <code>SELF-HOSTED ONLY</code> &nbsp; <code>NO CENTRAL SERVICE</code></p>
 
-  [![Project status: early development](https://img.shields.io/badge/status-early_development-C65D28)](https://github.com/vladi245/soundcloud-listen-along)
-  [![Chromium: unpacked](https://img.shields.io/badge/Chromium-unpacked-3B6EA8)](#install-in-a-browser)
-  [![Firefox: planned](https://img.shields.io/badge/Firefox-unlisted_AMO_planned-7651A8)](docs/firefox-review.md)
-  [![License: MIT](https://img.shields.io/badge/license-MIT-2E7D68)](LICENSE)
+[![Project status: early development](https://img.shields.io/badge/status-early_development-C65D28)](https://github.com/vladi245/soundcloud-listen-along)
+[![Chromium: unpacked](https://img.shields.io/badge/Chromium-unpacked-3B6EA8)](#install-in-a-browser)
+[![Firefox: planned](https://img.shields.io/badge/Firefox-unlisted_AMO_planned-7651A8)](docs/firefox-review.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2E7D68)](LICENSE)
 </div>
 
 > [!WARNING]

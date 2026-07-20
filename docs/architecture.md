@@ -8,12 +8,12 @@ Everything below marked "planned" is design direction, not shipped behavior or a
 
 ## Planned components
 
-| Component | Responsibility | Trust boundary |
-| --- | --- | --- |
-| Popup | Configure a backend, create or join a room, and show connection state | Extension UI |
-| Content script | Observe supported player state and apply authorized remote playback changes | SoundCloud page |
-| Background worker | Own room lifecycle, validate messages, coordinate tabs, and communicate with the backend | Browser extension |
-| Room backend | Authenticate or admit participants, order room events, and relay current state | Self-hosting operator |
+| Component         | Responsibility                                                                           | Trust boundary        |
+| ----------------- | ---------------------------------------------------------------------------------------- | --------------------- |
+| Popup             | Configure a backend, create or join a room, and show connection state                    | Extension UI          |
+| Content script    | Observe supported player state and apply authorized remote playback changes              | SoundCloud page       |
+| Background worker | Own room lifecycle, validate messages, coordinate tabs, and communicate with the backend | Browser extension     |
+| Room backend      | Authenticate or admit participants, order room events, and relay current state           | Self-hosting operator |
 
 ```text
 popup --------------------+
