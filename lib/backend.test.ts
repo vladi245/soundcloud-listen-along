@@ -26,6 +26,9 @@ describe('backend configuration', () => {
     expect(backendPermission('https://rooms.example.com')).toBe(
       'https://rooms.example.com/*',
     );
+    expect(backendPermission('http://localhost:8787')).toBe(
+      'http://localhost/*',
+    );
     expect(roomSocketUrl('https://rooms.example.com', 'ABC')).toBe(
       'wss://rooms.example.com/rooms/ABC/socket',
     );

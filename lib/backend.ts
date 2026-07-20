@@ -19,7 +19,8 @@ export function normalizeBackendUrl(value: string): string | null {
 }
 
 export function backendPermission(url: string): string {
-  return `${url}/*`;
+  const origin = new URL(url);
+  return `${origin.protocol}//${origin.hostname}/*`;
 }
 
 export function roomSocketUrl(backendUrl: string, roomCode: string): string {
