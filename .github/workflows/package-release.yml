@@ -28,6 +28,7 @@ jobs:
           path: |
             .output/*.zip
             .output/SHA256SUMS
+          include-hidden-files: true
           if-no-files-found: error
 
   release:
