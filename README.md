@@ -1,14 +1,13 @@
-<div align="center">
-  <img src="docs/header.svg" alt="Listen Along - synchronized rooms, independent streams" width="100%">
-  <h1>SoundCloud Listen Along</h1>
-  <p>An unofficial browser extension for synchronized listening through your own room server.</p>
-  <p><code>MVP IMPLEMENTED</code> &nbsp; <code>SELF-HOSTED ONLY</code> &nbsp; <code>NO CENTRAL SERVICE</code></p>
+# SoundCloud Listen Along
+
+An unofficial browser extension for synchronized listening through your own room server.
+
+`MVP IMPLEMENTED` | `SELF-HOSTED ONLY` | `NO CENTRAL SERVICE`
 
 [![Project status: MVP](https://img.shields.io/badge/status-MVP-C65D28)](https://github.com/vladi245/soundcloud-listen-along)
 [![Chromium: unpacked](https://img.shields.io/badge/Chromium-unpacked-3B6EA8)](#browser-installation)
 [![Firefox: development build](https://img.shields.io/badge/Firefox-development_build-7651A8)](#firefox)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2E7D68)](LICENSE)
-</div>
 
 > [!WARNING]
 > This is an early MVP, not a production-ready service. Player integration can break when SoundCloud changes its page, and browser autoplay rules may require a guest to start playback once.
