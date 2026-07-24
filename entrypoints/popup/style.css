@@ -172,6 +172,101 @@ label:not(:first-child) {
   font-weight: 400;
 }
 
+.mode-grid {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1.2rem;
+}
+
+.mode-button,
+.mode-button.primary {
+  width: 100%;
+  margin: 0;
+  padding: 0.9rem;
+  text-align: left;
+}
+
+.mode-button b,
+.mode-button span {
+  display: block;
+}
+
+.mode-button span {
+  margin-top: 0.25rem;
+  color: #a0a0a0;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.mode-button.primary span {
+  color: #ffffff;
+}
+
+.back-button {
+  display: block;
+  margin-bottom: 0.9rem;
+}
+
+.deploy-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border: 1px solid #303030;
+  background: #080808;
+}
+
+.deploy-panel .panel-label,
+.deploy-panel p,
+.deploy-panel .button-link {
+  grid-column: 1 / -1;
+}
+
+.deploy-panel .panel-label {
+  color: var(--orange);
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.deploy-panel code {
+  grid-column: 1;
+  color: #d4d4d4;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  overflow-wrap: anywhere;
+}
+
+.deploy-panel #copy-key {
+  grid-column: 2;
+  grid-row: 2;
+  padding: 0.35rem 0.5rem;
+}
+
+.deploy-panel p {
+  color: #858585;
+  font-size: 0.7rem;
+}
+
+.button-link {
+  border: 1px solid var(--orange);
+  padding: 0.65rem;
+  color: #ffffff;
+  background: var(--orange);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
 input {
   box-sizing: border-box;
   width: 100%;
@@ -247,6 +342,21 @@ button:focus-visible {
 .consent input {
   width: 16px;
   margin: 0.15rem 0 0;
+  accent-color: var(--orange);
+}
+
+.remember {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem;
+  font-weight: 400;
+  line-height: 1.4;
+  text-transform: none;
+}
+
+.remember input {
+  width: 16px;
+  margin: 0.1rem 0 0;
   accent-color: var(--orange);
 }
 

@@ -5,6 +5,8 @@ export const MESSAGE_NAMESPACE = 'soundcloud-listen-along';
 
 export interface ExtensionState {
   backendUrl?: string;
+  hasCreationKey?: boolean;
+  maxParticipants?: number;
   status: 'idle' | 'connecting' | 'connected' | 'error';
   roomCode?: string;
   role?: Role;
@@ -36,6 +38,7 @@ export type RuntimeMessage =
       type: 'configure-backend';
       backendUrl: string;
       creationKey: string;
+      rememberCreationKey: boolean;
     }
   | {
       namespace: typeof MESSAGE_NAMESPACE;
@@ -84,7 +87,8 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
       return (
         typeof value.backendUrl === 'string' &&
         typeof value.creationKey === 'string' &&
-        value.creationKey.length <= 128
+        value.creationKey.length <= 128 &&
+        typeof value.rememberCreationKey === 'boolean'
       );
     case 'create-room':
       return Number.isInteger(value.tabId) && Number(value.tabId) >= 0;

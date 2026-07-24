@@ -50,7 +50,7 @@ Each room allows at most 25 WebSocket connections and one connected host. The ro
 
 ## State and retention
 
-The extension stores the selected backend origin, room and participant identifiers, host token, latest playback state, and connection state in `browser.storage.session`. Leaving clears room state while retaining the backend origin for the browser session. Closing the browser session clears session storage according to browser behavior.
+The extension stores the selected backend origin and reported room capacity in `browser.storage.local`. It stores room and participant identifiers, host token, latest playback state, and connection state in `browser.storage.session`. The user can explicitly choose to keep the room creation key in local storage; otherwise it remains session-only. Leaving clears active room state while retaining the configured backend. Closing the browser session clears session storage according to browser behavior.
 
 The Durable Object stores the room code, host token, activity timestamps, host-presence state, and latest playback snapshot. A room is deleted after six hours without a valid joined message. After a host that has joined disconnects, the room is deleted if no host reconnects within one minute. Room closure removes all Durable Object storage and closes its sockets.
 

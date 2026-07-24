@@ -45,7 +45,7 @@ The Worker requires an operator-defined secret before it creates rooms. From `se
 npx wrangler secret put ROOM_CREATION_KEY
 ```
 
-Give this key only to people allowed to host. They enter it with the backend origin in the extension. Guests configure the same origin but leave the creation-key field empty. The key is held in browser session storage and sent only when creating a room.
+Give this key only to people allowed to host. They enter it with the backend origin in the extension. Guests configure the same origin without a creation key. The key is held in browser session storage and sent only when creating a room unless the host explicitly chooses to remember it in local extension storage on that device.
 
 ## Deploy
 
@@ -69,7 +69,7 @@ The extension requires the exact printed origin: scheme and host only, with no p
 
 1. Build and install the extension as described in the repository README.
 2. Open the popup and enter the deployed Worker origin. Hosts also enter the room creation key.
-3. Grant the optional browser permission for that origin.
+3. Grant the optional browser permission for that origin. The extension verifies the backend service and protocol before saving it.
 4. Open a SoundCloud track, review the transmission notice, and create or join a room.
 5. Give participants both the backend origin and room code. Participants must configure the same backend origin.
 

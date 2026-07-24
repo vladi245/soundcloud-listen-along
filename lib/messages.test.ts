@@ -27,5 +27,15 @@ describe('extension messages', () => {
         message({ type: 'join-room', tabId: -1, roomCode: 'room' }),
       ),
     ).toBe(false);
+    expect(
+      isRuntimeMessage(
+        message({
+          type: 'configure-backend',
+          backendUrl: 'https://rooms.example',
+          creationKey: '',
+          rememberCreationKey: false,
+        }),
+      ),
+    ).toBe(true);
   });
 });

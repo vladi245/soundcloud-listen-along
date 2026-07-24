@@ -20,14 +20,19 @@ Visiting SoundCloud remains subject to SoundCloud's own data practices. The brow
 
 ## Extension data
 
-The extension stores in browser session storage:
+The extension stores in persistent browser extension storage:
 
 - the selected backend URL;
+- the room capacity reported by that backend;
+- the operator-provided room creation key only when the user explicitly chooses to remember it on that device.
+
+The extension stores in browser session storage:
+
 - room and participant identifiers and a host token when hosting;
-- the operator-provided room creation key when configured;
+- the operator-provided room creation key when it is not remembered;
 - transient connection and synchronization state.
 
-Room session data is removed when the user leaves and when the browser session ends. The selected backend URL remains available only for that browser session.
+Room session data is removed when the user leaves and when the browser session ends. The selected backend URL remains available until it is replaced or the extension's local data is cleared. A remembered creation key has the same lifetime and is available to other software or people with access to that browser profile; users should enable the option only on a trusted device.
 
 The extension/backend protocol processes:
 
@@ -38,6 +43,7 @@ The extension/backend protocol processes:
 - event and synchronization timestamps, sequence information, and playback changes such as seek, play, pause, or track change;
 - connection/session metadata needed to join and reconnect;
 - protocol version and error information needed for interoperability.
+- backend compatibility metadata, including service identifier, protocol version, room capacity, and whether a creation key is required.
 
 The Durable Object stores the room code, host token, activity and host-presence timestamps, and latest playback snapshot. It deletes application room storage after six hours of inactivity or, once the host has joined, one minute after the host disconnects without returning. Cloudflare and network providers may also observe IP addresses, connection times, user-agent or protocol metadata, and operational logs. Their retention is controlled by the backend operator and hosting stack rather than this application cleanup.
 

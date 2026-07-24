@@ -1,3 +1,15 @@
+import { PROTOCOL_VERSION } from './protocol';
+
+export const BACKEND_SERVICE = 'soundcloud-listen-along';
+
+export interface BackendMetadata {
+  service: typeof BACKEND_SERVICE;
+  protocolVersion: typeof PROTOCOL_VERSION;
+  maxParticipants: number;
+  creationKeyRequired: boolean;
+  roomCreationEnabled: boolean;
+}
+
 export function normalizeBackendUrl(value: string): string | null {
   try {
     const url = new URL(value.trim());
@@ -16,6 +28,24 @@ export function normalizeBackendUrl(value: string): string | null {
   } catch {
     return null;
   }
+}
+
+export function parseBackendMetadata(value: unknown): BackendMetadata | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const metadata = value as Record<string, unknown>;
+  if (
+    metadata.service !== BACKEND_SERVICE ||
+    metadata.protocolVersion !== PROTOCOL_VERSION ||
+    !Number.isInteger(metadata.maxParticipants) ||
+    Number(metadata.maxParticipants) < 1 ||
+    typeof metadata.creationKeyRequired !== 'boolean' ||
+    typeof metadata.roomCreationEnabled !== 'boolean'
+  ) {
+    return null;
+  }
+  return metadata as unknown as BackendMetadata;
 }
 
 export function backendPermission(url: string): string {

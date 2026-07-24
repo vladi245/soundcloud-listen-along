@@ -2,6 +2,17 @@ import { SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 
 describe('room service', () => {
+  it('advertises a compatible service', async () => {
+    const response = await SELF.fetch('https://rooms.example/meta');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      service: 'soundcloud-listen-along',
+      protocolVersion: 1,
+      creationKeyRequired: true,
+      roomCreationEnabled: true,
+    });
+  });
+
   it('creates and resolves an ephemeral room', async () => {
     const created = await SELF.fetch('https://rooms.example/rooms', {
       method: 'POST',
