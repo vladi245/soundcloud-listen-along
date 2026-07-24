@@ -101,7 +101,7 @@ function renderBackendForm(mode: SetupMode, error?: string): void {
               <span class="panel-label">Deployment secret</span>
               <code id="generated-key"></code>
               <button id="copy-key" type="button">Copy key</button>
-              <a class="button-link" href="https://dash.cloudflare.com/?to=/:account/workers-and-pages" target="_blank" rel="noreferrer">Open Cloudflare</a>
+              <a class="button-link" href="https://deploy.workers.cloudflare.com/?url=https://github.com/vladi245/soundcloud-listen-along-server" target="_blank" rel="noreferrer">Deploy to Cloudflare</a>
               <p>Paste this key into <code>ROOM_CREATION_KEY</code> when deploying the Worker. Cloudflare will show its address when deployment finishes.</p>
             </div>`
           : ''
