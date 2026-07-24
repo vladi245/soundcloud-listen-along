@@ -23,3 +23,22 @@ jobs:
       - run: npm run build:firefox
       - run: npm run validate:manifests
       - run: npm audit --omit=dev
+
+  server-template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run server-template:export -- /tmp/opencode/soundcloud-listen-along-server
+      - run: npm ci
+        working-directory: /tmp/opencode/soundcloud-listen-along-server
+      - run: npm run typecheck
+        working-directory: /tmp/opencode/soundcloud-listen-along-server
+      - run: npm test
+        working-directory: /tmp/opencode/soundcloud-listen-along-server
+      - run: npx wrangler deploy --dry-run
+        working-directory: /tmp/opencode/soundcloud-listen-along-server

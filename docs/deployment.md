@@ -2,13 +2,15 @@
 
 The server is a Cloudflare Worker backed by the `Room` Durable Object. It must be deployed by each operator under that operator's Cloudflare account. The project does not run a central service or fallback relay.
 
+For setup without a terminal, use the extension's **Deploy to Cloudflare** action. It opens the public, backend-only deployment template, provisions both Durable Object bindings, and requests the generated room creation key. The source repository for that template is [soundcloud-listen-along-server](https://github.com/vladi245/soundcloud-listen-along-server).
+
 ## Requirements
 
 - A Cloudflare account with Workers and Durable Objects available.
 - Node.js and npm.
 - A local checkout of this repository.
 
-The checked-in `server/wrangler.toml` defines the Worker name `soundcloud-listen-along-server`, entry point `src/index.ts`, `ROOMS` Durable Object binding, `Room` class, and `v1` SQLite-class migration.
+The checked-in `server/wrangler.toml` defines the Worker name, entry point, `Room` and `CreationLimiter` Durable Object bindings, and their SQLite-class migrations.
 
 ## Install and authenticate
 
@@ -57,7 +59,7 @@ npm test
 npm run deploy
 ```
 
-Wrangler creates the Worker, applies the `v1` Durable Object migration, and prints the deployed URL. For a workers.dev deployment it normally has this form:
+Wrangler creates the Worker, applies pending Durable Object migrations, and prints the deployed URL. For a workers.dev deployment it normally has this form:
 
 ```text
 https://soundcloud-listen-along-server.<workers-subdomain>.workers.dev
