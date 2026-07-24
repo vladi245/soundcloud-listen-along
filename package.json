@@ -23,8 +23,9 @@
     "server:check": "npm --prefix server run typecheck && npm --prefix server test",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run server:check",
     "validate:manifests": "node scripts/validate-manifests.mjs",
+    "validate:release": "node scripts/validate-release.mjs",
     "server-template:export": "node scripts/export-server-template.mjs",
-    "release:package": "npm run check && npm run build:all && npm run zip && npm run zip:firefox",
+    "release:package": "npm run check && npm run build:all && npm run zip && npm run zip:firefox && npm run validate:release",
     "postinstall": "wxt prepare && npm --prefix server ci"
   },
   "devDependencies": {

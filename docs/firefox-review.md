@@ -4,6 +4,8 @@
 
 Firefox distribution is planned through unlisted signing on addons.mozilla.org (AMO). No signed Firefox package is currently distributed, and this project does not claim AMO approval or review readiness.
 
+Submission artifacts and reviewer copy are maintained in [browser store submission](store-submission.md). The canonical public privacy policy is exported to the [backend template repository](https://github.com/vladi245/soundcloud-listen-along-server/blob/main/PRIVACY.md).
+
 The current command builds a Manifest V3 artifact:
 
 ```sh
@@ -50,4 +52,4 @@ Unlisted signing limits public AMO discovery; it does not waive Mozilla policies
 
 ## Packaging
 
-Run `npm run release:package` from a clean checkout. WXT creates the unsigned Firefox package and its matching source archive in `.output/`. Submit both to AMO for unlisted signing. Do not publish the unsigned Firefox ZIP as an installable release.
+Run `REQUIRE_RELEASE_TAG=1 npm run release:package` from a clean, exactly tagged checkout. WXT creates the unsigned Firefox package and its matching source archive in `.output/`. Submit both to AMO for unlisted signing. Reviewers can reproduce the extension from that source archive with `npm ci`, `npm run typecheck`, and `npm run build:firefox`. Do not publish the unsigned Firefox ZIP as an installable release.
