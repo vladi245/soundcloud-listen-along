@@ -30,9 +30,10 @@ function shell(content: string): string {
       <header>
         <div class="signal" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
         <div>
-          <span class="eyebrow">Unofficial extension</span>
+          <span class="eyebrow">SC // Room link</span>
           <h1>Listen Along</h1>
         </div>
+        <span class="build-tag">SELF-HOSTED</span>
       </header>
       ${content}
       <p class="legal">Audio stays on SoundCloud. This extension is independent and unofficial.</p>
