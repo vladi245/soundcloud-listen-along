@@ -92,6 +92,16 @@ export default defineBackground(() => {
     await save();
   };
 
+  const fetchBackendMetadata = async (backendUrl: string) => {
+    const response = await fetch(`${backendUrl}/meta`, { cache: 'no-store' });
+    const value: unknown = await response.json().catch(() => null);
+    const metadata = parseBackendMetadata(value);
+    if (!response.ok || !metadata) {
+      throw new Error('Backend is unavailable or incompatible');
+    }
+    return metadata;
+  };
+
   const stopSocket = () => {
     reconnect = false;
     if (heartbeat) clearInterval(heartbeat);
@@ -273,6 +283,8 @@ export default defineBackground(() => {
         participantCount: 0,
         error: undefined,
         autoplayBlocked: false,
+        pendingRoomCode: undefined,
+        pendingConsent: undefined,
       },
       tabId,
       participantId: randomOpaqueId(),
@@ -299,16 +311,7 @@ export default defineBackground(() => {
       if (request.type === 'configure-backend') {
         const backendUrl = normalizeBackendUrl(request.backendUrl);
         if (!backendUrl) throw new Error('Enter a secure backend origin');
-        const metadataResponse = await fetch(`${backendUrl}/meta`, {
-          cache: 'no-store',
-        });
-        const metadataValue: unknown = await metadataResponse
-          .json()
-          .catch(() => null);
-        const metadata = parseBackendMetadata(metadataValue);
-        if (!metadataResponse.ok || !metadata) {
-          throw new Error('Backend is unavailable or incompatible');
-        }
+        const metadata = await fetchBackendMetadata(backendUrl);
         if (request.creationKey && !metadata.roomCreationEnabled) {
           throw new Error('Backend has not enabled room creation');
         }
@@ -328,6 +331,37 @@ export default defineBackground(() => {
           backendUrl,
           hasCreationKey: Boolean(session.creationKey),
           maxParticipants: metadata.maxParticipants,
+          error: undefined,
+          status: 'idle',
+        });
+      } else if (request.type === 'configure-invite') {
+        const backendUrl = normalizeBackendUrl(request.backendUrl);
+        if (!backendUrl) throw new Error('Invitation backend is invalid');
+        const metadata = await fetchBackendMetadata(backendUrl);
+        const sameBackend = session.public.backendUrl === backendUrl;
+        const creationKey = sameBackend ? session.creationKey : undefined;
+        const stored = await browser.storage.local.get(preferenceKey);
+        const preferences = stored[preferenceKey] as
+          BackendPreferences | undefined;
+        await clearRoom();
+        session.creationKey = creationKey;
+        if (!preferences || preferences.backendUrl === backendUrl) {
+          await browser.storage.local.set({
+            [preferenceKey]: {
+              backendUrl,
+              maxParticipants: metadata.maxParticipants,
+              ...(preferences?.creationKey
+                ? { creationKey: preferences.creationKey }
+                : {}),
+            } satisfies BackendPreferences,
+          });
+        }
+        await setPublic({
+          backendUrl,
+          hasCreationKey: Boolean(creationKey),
+          maxParticipants: metadata.maxParticipants,
+          pendingRoomCode: request.roomCode,
+          pendingConsent: true,
           error: undefined,
           status: 'idle',
         });

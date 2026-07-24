@@ -24,6 +24,15 @@ describe('extension messages', () => {
     ).toBe(true);
     expect(
       isRuntimeMessage(
+        message({
+          type: 'configure-invite',
+          backendUrl: 'https://rooms.example',
+          roomCode: '0123456789ABCDEF',
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isRuntimeMessage(
         message({ type: 'join-room', tabId: -1, roomCode: 'room' }),
       ),
     ).toBe(false);

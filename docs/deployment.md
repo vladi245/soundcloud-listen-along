@@ -71,7 +71,9 @@ The extension requires the exact printed origin: scheme and host only, with no p
 2. Open the popup and enter the deployed Worker origin. Hosts also enter the room creation key.
 3. Grant the optional browser permission for that origin. The extension verifies the backend service and protocol before saving it.
 4. Open a SoundCloud track, review the transmission notice, and create or join a room.
-5. Give participants both the backend origin and room code. Participants must configure the same backend origin.
+5. Share the invitation link shown for the room. It contains the backend origin and puts the room code in a URL fragment that is not sent to the Worker landing page.
+
+Guests open the invitation link and then select the installed extension from the browser toolbar. After the guest accepts the transmission notice and backend permission, the extension verifies the backend, prepares the room code, and opens SoundCloud. Plain room-code entry remains available when participants have already configured the same backend.
 
 The extension accepts HTTPS origins in normal use. It accepts HTTP only on `localhost` and `127.0.0.1` for development.
 

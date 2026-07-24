@@ -1,5 +1,5 @@
 import type { PlaybackState, Role } from './protocol';
-import { isPlaybackState } from './protocol';
+import { isPlaybackState, isRoomCode } from './protocol';
 
 export const MESSAGE_NAMESPACE = 'soundcloud-listen-along';
 
@@ -7,6 +7,8 @@ export interface ExtensionState {
   backendUrl?: string;
   hasCreationKey?: boolean;
   maxParticipants?: number;
+  pendingRoomCode?: string;
+  pendingConsent?: boolean;
   status: 'idle' | 'connecting' | 'connected' | 'error';
   roomCode?: string;
   role?: Role;
@@ -39,6 +41,12 @@ export type RuntimeMessage =
       backendUrl: string;
       creationKey: string;
       rememberCreationKey: boolean;
+    }
+  | {
+      namespace: typeof MESSAGE_NAMESPACE;
+      type: 'configure-invite';
+      backendUrl: string;
+      roomCode: string;
     }
   | {
       namespace: typeof MESSAGE_NAMESPACE;
@@ -90,6 +98,8 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
         value.creationKey.length <= 128 &&
         typeof value.rememberCreationKey === 'boolean'
       );
+    case 'configure-invite':
+      return typeof value.backendUrl === 'string' && isRoomCode(value.roomCode);
     case 'create-room':
       return Number.isInteger(value.tabId) && Number(value.tabId) >= 0;
     case 'join-room':

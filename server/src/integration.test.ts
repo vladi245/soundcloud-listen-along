@@ -2,6 +2,14 @@ import { SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 
 describe('room service', () => {
+  it('serves the invitation landing page', async () => {
+    const response = await SELF.fetch('https://rooms.example/');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Security-Policy')).toContain(
+      "style-src 'self'",
+    );
+  });
+
   it('advertises a compatible service', async () => {
     const response = await SELF.fetch('https://rooms.example/meta');
     expect(response.status).toBe(200);

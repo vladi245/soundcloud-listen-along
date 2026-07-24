@@ -40,6 +40,8 @@ SoundCloud page <-> content script <-> background worker
 8. Guest background workers adjust timestamps for estimated clock offset and ask their content scripts to navigate, seek when drift reaches one second, play, or pause.
 9. Heartbeats run every 20 seconds. A closed socket reconnects after two seconds while the room session remains active.
 
+Hosts share an invitation rooted at their own Worker origin with the room code in the URL fragment. The fragment is not sent in the HTTP request. The Worker serves a static explanation page, and the popup reads the active tab URL after the user opens the extension. Accepting the invitation requests access to that backend, verifies its protocol metadata, stores a pending room code in session storage, and opens SoundCloud.
+
 The extension session is associated with the SoundCloud tab active when the room was created or joined. Guest navigation stays within validated HTTPS SoundCloud URLs. Browser autoplay blocking is surfaced in the popup and may require one user-initiated playback action.
 
 ## Protocol and limits
@@ -50,7 +52,7 @@ Each room allows at most 25 WebSocket connections and one connected host. The ro
 
 ## State and retention
 
-The extension stores the selected backend origin and reported room capacity in `browser.storage.local`. It stores room and participant identifiers, host token, latest playback state, and connection state in `browser.storage.session`. The user can explicitly choose to keep the room creation key in local storage; otherwise it remains session-only. Leaving clears active room state while retaining the configured backend. Closing the browser session clears session storage according to browser behavior.
+The extension stores the selected default backend origin and reported room capacity in `browser.storage.local`. It stores temporary invitation backend selection, pending invitation state, room and participant identifiers, host token, latest playback state, and connection state in `browser.storage.session`. Accepting an invitation for another backend does not replace a remembered host configuration. The user can explicitly choose to keep the room creation key in local storage; otherwise it remains session-only. Leaving clears active room state while retaining the current backend. Closing the browser session clears session storage according to browser behavior and restores the default backend on the next session.
 
 The Durable Object stores the room code, host token, activity timestamps, host-presence state, and latest playback snapshot. A room is deleted after six hours without a valid joined message. After a host that has joined disconnects, the room is deleted if no host reconnects within one minute. Room closure removes all Durable Object storage and closes its sockets.
 

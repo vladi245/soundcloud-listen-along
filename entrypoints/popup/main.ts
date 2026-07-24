@@ -1,8 +1,11 @@
 import './style.css';
 import {
   backendPermission,
+  createRoomInvite,
   normalizeBackendUrl,
+  parseRoomInvite,
   randomOpaqueId,
+  type RoomInvite,
 } from '@/lib/backend';
 import {
   message,
@@ -14,6 +17,7 @@ import { normalizeRoomCode } from '@/lib/protocol';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 let currentState: ExtensionState = { status: 'idle', participantCount: 0 };
 let setupCreationKey = '';
+let activeInvite: RoomInvite | null = null;
 
 type SetupMode = 'host' | 'guest';
 
@@ -29,6 +33,11 @@ async function activeTabId(): Promise<number> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   if (tab?.id === undefined) throw new Error('No active tab found');
   return tab.id;
+}
+
+async function invitationFromActiveTab(): Promise<RoomInvite | null> {
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  return tab?.url ? parseRoomInvite(tab.url) : null;
 }
 
 function shell(content: string): string {
@@ -194,6 +203,7 @@ function renderBackendForm(mode: SetupMode, error?: string): void {
 }
 
 function renderLobby(): void {
+  const canHost = currentState.hasCreationKey;
   app.innerHTML = shell(`
     <section>
       <div class="server-row">
@@ -201,14 +211,13 @@ function renderLobby(): void {
         <button id="change-backend" class="text-button" type="button">Change</button>
       </div>
       <span class="step">02 / Room</span>
-      <h2>Start together</h2>
-      <p class="muted">Open the track you want on SoundCloud, then host or join a room.</p>
+      <h2>${currentState.pendingRoomCode ? 'Invitation ready' : canHost ? 'Start together' : 'Join a room'}</h2>
+      <p class="muted">Open the track you want on SoundCloud, then ${canHost ? 'host or join a room' : 'join the room'}.</p>
       <label class="consent">
-        <input id="consent" type="checkbox">
+        <input id="consent" type="checkbox" ${currentState.pendingConsent ? 'checked' : ''}>
         <span>Send the current track URL and playback timing to this backend while connected.</span>
       </label>
-      <button id="create" class="primary" type="button">Create room</button>
-      <div class="divider"><span>or join</span></div>
+      ${canHost ? '<button id="create" class="primary" type="button">Create room</button><div class="divider"><span>or join</span></div>' : ''}
       <form id="join-form" class="join-form">
         <label for="room-code">Room code</label>
         <div class="input-row">
@@ -221,6 +230,10 @@ function renderLobby(): void {
   `);
   document.querySelector('#backend')!.textContent =
     currentState.backendUrl ?? '';
+  const roomInput = document.querySelector<HTMLInputElement>('#room-code')!;
+  roomInput.value = currentState.pendingRoomCode
+    ? formatRoomCode(currentState.pendingRoomCode)
+    : '';
   const notice = document.querySelector<HTMLParagraphElement>('#notice')!;
   if (currentState.error) notice.textContent = currentState.error;
 
@@ -248,7 +261,7 @@ function renderLobby(): void {
     }
   };
 
-  document.querySelector('#create')!.addEventListener('click', () => {
+  document.querySelector('#create')?.addEventListener('click', () => {
     void begin('create-room');
   });
   document.querySelector('#change-backend')!.addEventListener('click', () => {
@@ -263,8 +276,75 @@ function renderLobby(): void {
     .querySelector<HTMLFormElement>('#join-form')!
     .addEventListener('submit', (event) => {
       event.preventDefault();
-      const input = document.querySelector<HTMLInputElement>('#room-code')!;
-      void begin('join-room', normalizeRoomCode(input.value));
+      void begin('join-room', normalizeRoomCode(roomInput.value));
+    });
+}
+
+function renderInvite(invite: RoomInvite): void {
+  app.innerHTML = shell(`
+    <section>
+      <span class="step">01 / Invitation</span>
+      <h2>Join this room</h2>
+      <p class="muted">This invitation will configure the host's room server. The browser will ask you to approve access to that server only.</p>
+      <dl class="invite-details">
+        <div><dt>Backend</dt><dd id="invite-backend"></dd></div>
+        <div><dt>Room</dt><dd id="invite-room"></dd></div>
+      </dl>
+      <label class="consent">
+        <input id="invite-consent" type="checkbox">
+        <span>Send the current track URL and playback timing to this backend while connected.</span>
+      </label>
+      <button id="accept-invite" class="primary" type="button">Allow and continue</button>
+      <p id="notice" class="notice" role="status"></p>
+    </section>
+  `);
+  document.querySelector('#invite-backend')!.textContent = invite.backendUrl;
+  document.querySelector('#invite-room')!.textContent = formatRoomCode(
+    invite.roomCode,
+  );
+  const notice = document.querySelector<HTMLParagraphElement>('#notice')!;
+  document
+    .querySelector('#accept-invite')!
+    .addEventListener('click', async () => {
+      if (
+        !document.querySelector<HTMLInputElement>('#invite-consent')!.checked
+      ) {
+        notice.textContent = 'Review and accept the transmission notice first.';
+        return;
+      }
+      const permission = backendPermission(invite.backendUrl);
+      let alreadyGranted: boolean;
+      let granted: boolean;
+      try {
+        alreadyGranted = await browser.permissions.contains({
+          origins: [permission],
+        });
+        granted =
+          alreadyGranted ||
+          (await browser.permissions.request({ origins: [permission] }));
+      } catch {
+        notice.textContent = 'This invitation backend cannot be permitted.';
+        return;
+      }
+      if (!granted) {
+        notice.textContent = 'Backend access was not granted.';
+        return;
+      }
+      const response = await send({
+        type: 'configure-invite',
+        backendUrl: invite.backendUrl,
+        roomCode: invite.roomCode,
+      });
+      currentState = response.state;
+      if (!response.ok) {
+        if (!alreadyGranted) {
+          await browser.permissions.remove({ origins: [permission] });
+        }
+        notice.textContent =
+          response.state.error ?? 'Invitation is unavailable.';
+        return;
+      }
+      await browser.tabs.create({ url: 'https://soundcloud.com/' });
     });
 }
 
@@ -281,9 +361,9 @@ function renderSession(): void {
       </div>
       <span class="step">03 / Listening</span>
       <h2>${currentState.role === 'host' ? 'Your room' : 'Listening room'}</h2>
-      <button id="copy-code" class="room-code" type="button" aria-label="Copy room code">
+      <button id="copy-code" class="room-code" type="button" aria-label="Copy room invitation">
         <span id="room-code"></span>
-        <small>Click to copy</small>
+        <small>Click to copy invitation</small>
       </button>
       <dl>
         <div><dt>Role</dt><dd id="role"></dd></div>
@@ -305,10 +385,15 @@ function renderSession(): void {
   if (currentState.error) notice.textContent = currentState.error;
   document.querySelector('#copy-code')!.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(currentState.roomCode ?? '');
-      notice.textContent = 'Room code copied.';
+      await navigator.clipboard.writeText(
+        createRoomInvite(
+          currentState.backendUrl ?? '',
+          currentState.roomCode ?? '',
+        ),
+      );
+      notice.textContent = 'Invitation copied.';
     } catch {
-      notice.textContent = 'Select the code and copy it manually.';
+      notice.textContent = 'Share the backend and room code manually.';
     }
   });
   document.querySelector('#leave')!.addEventListener('click', async () => {
@@ -319,7 +404,14 @@ function renderSession(): void {
 }
 
 function render(): void {
-  if (!currentState.backendUrl) {
+  if (
+    activeInvite &&
+    !currentState.roomCode &&
+    (currentState.backendUrl !== activeInvite.backendUrl ||
+      currentState.pendingRoomCode !== activeInvite.roomCode)
+  ) {
+    renderInvite(activeInvite);
+  } else if (!currentState.backendUrl) {
     renderStart(currentState.error);
   } else if (currentState.roomCode) {
     renderSession();
@@ -330,7 +422,10 @@ function render(): void {
 
 async function refresh(): Promise<void> {
   try {
-    currentState = (await send({ type: 'get-state' })).state;
+    [currentState, activeInvite] = await Promise.all([
+      send({ type: 'get-state' }).then((response) => response.state),
+      invitationFromActiveTab(),
+    ]);
     render();
   } catch {
     renderStart('Extension background is unavailable.');

@@ -472,6 +472,15 @@ dl div {
   background: #0c0c0c;
 }
 
+.invite-details {
+  grid-template-columns: 1fr;
+  margin-top: 1rem;
+}
+
+.invite-details dd {
+  overflow-wrap: anywhere;
+}
+
 dt {
   color: #777777;
   font-family: var(--mono);
