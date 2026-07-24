@@ -48,7 +48,7 @@ The extension/backend protocol processes:
 
 Room invitation links place the room code in the URL fragment. Browsers do not send that fragment in the HTTP request for the operator's landing page. The extension reads the active invitation tab only after the user opens its popup and uses the fragment to prepare the selected backend and room.
 
-The Durable Object stores the room code, host token, activity and host-presence timestamps, and latest playback snapshot. It deletes application room storage after six hours of inactivity or, once the host has joined, one minute after the host disconnects without returning. Cloudflare and network providers may also observe IP addresses, connection times, user-agent or protocol metadata, and operational logs. Their retention is controlled by the backend operator and hosting stack rather than this application cleanup.
+The room Durable Object stores the room code, host token, creation, activity and host-presence timestamps, and latest playback snapshot. It deletes application room storage when the host does not join within five minutes, after six hours of inactivity, or, once the host has joined, when its last observed connection is more than one minute old. A separate creation limiter stores up to 30 request timestamps covering the preceding minute; it does not store client IP addresses. Cloudflare and network providers may still observe IP addresses, connection times, user-agent or protocol metadata, and operational logs. Their retention is controlled by the backend operator and hosting stack rather than this application cleanup.
 
 ## Exclusions and minimization
 

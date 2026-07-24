@@ -48,13 +48,13 @@ The extension session is associated with the SoundCloud tab active when the room
 
 The JSON protocol is version 1 and is defined in `lib/protocol.ts`. The server requires exact client message fields, text frames, and a maximum frame size of 16 KiB. Playback URLs must use HTTPS on `soundcloud.com` or a subdomain, timestamps must be finite and non-negative, and host sequence numbers must increase.
 
-Each room allows at most 25 WebSocket connections and one connected host. The room code is an unlisted locator and the only guest admission credential; it is not a password. The host token controls playback and must not be shared with guests.
+Each room allows at most 25 WebSocket connections, including connections that have not completed the join handshake, and one connected host. A socket must join within ten seconds. Room creation is limited across each operator deployment without retaining client IP addresses. The room code is an unlisted locator and the only guest admission credential; it is not a password. The host token controls playback and must not be shared with guests.
 
 ## State and retention
 
 The extension stores the selected default backend origin and reported room capacity in `browser.storage.local`. It stores temporary invitation backend selection, pending invitation state, room and participant identifiers, host token, latest playback state, and connection state in `browser.storage.session`. Accepting an invitation for another backend does not replace a remembered host configuration. The user can explicitly choose to keep the room creation key in local storage; otherwise it remains session-only. Leaving clears active room state while retaining the current backend. Closing the browser session clears session storage according to browser behavior and restores the default backend on the next session.
 
-The Durable Object stores the room code, host token, activity timestamps, host-presence state, and latest playback snapshot. A room is deleted after six hours without a valid joined message. After a host that has joined disconnects, the room is deleted if no host reconnects within one minute. Room closure removes all Durable Object storage and closes its sockets.
+The Durable Object stores the room code, host token, creation and activity timestamps, host-presence state, and latest playback snapshot. A new room is deleted if its host does not join within five minutes. An active room is deleted after six hours without a valid joined message. Host heartbeats maintain a persistent liveness deadline. After a host that has joined disconnects, or after Durable Object activation finds no restored host socket, the room is deleted if the host's last observed connection is more than one minute old. Room closure removes all Durable Object storage and closes its sockets. A separate Durable Object enforces a deployment-wide limit of 30 room creations in any rolling 60-second period and stores only up to 30 request timestamps.
 
 Cloudflare platform logs, metrics, backups, and account retention are outside the application-level cleanup and remain the operator's responsibility.
 

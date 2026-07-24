@@ -98,9 +98,11 @@ For extension development, run `npm install` and `npm run dev` from the reposito
 
 - Use only HTTPS for deployed origins; Cloudflare terminates TLS for workers.dev and configured custom domains.
 - Treat room codes as unlisted guest access credentials and host tokens as control credentials.
-- A room accepts at most 25 WebSocket connections and text messages up to 16 KiB.
+- A room accepts at most 25 WebSocket connections, requires a join message within ten seconds, and accepts text messages up to 16 KiB.
+- Each deployment accepts at most 30 valid room-creation requests in any rolling 60-second period. The limiter stores up to 30 request timestamps, not client IP addresses.
 - Only the host-token holder can publish playback state, and host sequence numbers must increase.
 - Application room storage is deleted after six hours of inactivity.
+- A new room is deleted if its host does not join within five minutes.
 - Once a host has joined, its disconnection starts a one-minute grace period; the room is deleted if the host does not return.
 - Application cleanup does not define Cloudflare's retention for logs, metrics, backups, abuse records, or account data.
 

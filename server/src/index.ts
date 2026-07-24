@@ -17,10 +17,16 @@ const MAX_SOCKETS = 25;
 const MAX_MESSAGE_BYTES = 16 * 1024;
 const INACTIVITY_MS = 6 * 60 * 60 * 1000;
 const HOST_GRACE_MS = 60 * 1000;
+const HOST_JOIN_MS = 5 * 60 * 1000;
+const SOCKET_JOIN_MS = 10 * 1000;
+const CREATION_WINDOW_MS = 60 * 1000;
+const MAX_CREATIONS_PER_WINDOW = 30;
 const ROOM_KEY = 'room';
+const RATE_KEY = 'rate';
 
 interface Env {
   ROOMS: DurableObjectNamespace;
+  CREATION_LIMITER: DurableObjectNamespace;
   ALLOWED_ORIGINS?: string;
   ROOM_CREATION_KEY?: string;
 }
@@ -28,16 +34,23 @@ interface Env {
 interface RoomRecord {
   roomCode: string;
   hostToken: string;
+  createdAt?: number;
   lastActivity: number;
   hostHasJoined: boolean;
+  hostLastSeenAt?: number;
   hostMissingSince?: number;
   snapshot?: PlaybackState;
 }
 
 interface SocketAttachment {
   joined: boolean;
+  connectedAt?: number;
   participantId?: string;
   role?: Role;
+}
+
+interface RateRecord {
+  timestamps: number[];
 }
 
 const securityHeaders: Record<string, string> = {
@@ -204,6 +217,29 @@ export default {
           origin,
         );
       }
+      const limiter = env.CREATION_LIMITER.get(
+        env.CREATION_LIMITER.idFromName('global'),
+      );
+      const rate = await limiter.fetch('https://limiter.internal/consume', {
+        method: 'POST',
+      });
+      if (rate.status === 429) {
+        return jsonError(
+          429,
+          'creation_rate_limited',
+          'Too many rooms created; try again shortly',
+          origin,
+          { 'Retry-After': rate.headers.get('Retry-After') ?? '60' },
+        );
+      }
+      if (!rate.ok) {
+        return jsonError(
+          503,
+          'creation_unavailable',
+          'Room creation is temporarily unavailable',
+          origin,
+        );
+      }
 
       for (let attempt = 0; attempt < 5; attempt += 1) {
         const roomBytes = crypto.getRandomValues(
@@ -281,7 +317,24 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 export class Room implements DurableObject {
-  constructor(private readonly state: DurableObjectState) {}
+  constructor(private readonly state: DurableObjectState) {
+    state.blockConcurrencyWhile(async () => {
+      const room = await state.storage.get<RoomRecord>(ROOM_KEY);
+      if (!room) return;
+      if (room.createdAt === undefined) {
+        room.createdAt = room.lastActivity;
+      }
+      if (room.hostHasJoined) {
+        if (this.hasJoinedHost()) {
+          room.hostLastSeenAt = Date.now();
+          delete room.hostMissingSince;
+        } else {
+          room.hostMissingSince ??= room.hostLastSeenAt ?? Date.now();
+        }
+      }
+      await this.saveRoom(room);
+    });
+  }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -298,10 +351,17 @@ export class Room implements DurableObject {
       await this.state.storage.put<RoomRecord>(ROOM_KEY, {
         roomCode,
         hostToken,
+        createdAt: now,
         lastActivity: now,
         hostHasJoined: false,
       });
-      await this.state.storage.setAlarm(now + INACTIVITY_MS);
+      await this.scheduleAlarm({
+        roomCode,
+        hostToken,
+        createdAt: now,
+        lastActivity: now,
+        hostHasJoined: false,
+      });
       return new Response(null, { status: 201 });
     }
 
@@ -317,11 +377,18 @@ export class Room implements DurableObject {
     if (!room || !isRoomCode(roomCode)) {
       return jsonError(404, 'room_not_found', 'Room not found');
     }
+    if (this.state.getWebSockets().length >= MAX_SOCKETS) {
+      return jsonError(429, 'room_full', 'Room is full');
+    }
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
-    server.serializeAttachment({ joined: false } satisfies SocketAttachment);
+    server.serializeAttachment({
+      joined: false,
+      connectedAt: Date.now(),
+    } satisfies SocketAttachment);
     this.state.acceptWebSocket(server);
+    await this.scheduleAlarm(room);
     return new Response(null, {
       status: 101,
       webSocket: client,
@@ -394,10 +461,39 @@ export class Room implements DurableObject {
     const room = await this.state.storage.get<RoomRecord>(ROOM_KEY);
     if (!room) return;
     const now = Date.now();
+    for (const socket of this.state.getWebSockets()) {
+      const attachment = socketAttachment(socket);
+      if (
+        !attachment.joined &&
+        attachment.connectedAt !== undefined &&
+        now >= attachment.connectedAt + SOCKET_JOIN_MS
+      ) {
+        socket.serializeAttachment({
+          joined: false,
+        } satisfies SocketAttachment);
+        socket.close(1008, 'Join timeout');
+      }
+    }
     const inactivityDeadline = room.lastActivity + INACTIVITY_MS;
+    if (room.hostHasJoined) {
+      if (this.hasJoinedHost()) {
+        room.hostLastSeenAt = now;
+        delete room.hostMissingSince;
+      } else {
+        room.hostMissingSince ??= room.hostLastSeenAt ?? now;
+      }
+      await this.state.storage.put(ROOM_KEY, room);
+    }
+    const initialHostDeadline = room.hostHasJoined
+      ? Number.POSITIVE_INFINITY
+      : (room.createdAt ?? room.lastActivity) + HOST_JOIN_MS;
     const hostDeadline = room.hostMissingSince
       ? room.hostMissingSince + HOST_GRACE_MS
       : Number.POSITIVE_INFINITY;
+    if (now >= initialHostDeadline) {
+      await this.closeRoom('host_never_joined');
+      return;
+    }
     if (now >= hostDeadline) {
       await this.closeRoom('host_disconnected');
       return;
@@ -406,9 +502,7 @@ export class Room implements DurableObject {
       await this.closeRoom('inactive');
       return;
     }
-    await this.state.storage.setAlarm(
-      Math.min(inactivityDeadline, hostDeadline),
-    );
+    await this.scheduleAlarm(room);
   }
 
   private async join(
@@ -418,6 +512,13 @@ export class Room implements DurableObject {
     const room = await this.state.storage.get<RoomRecord>(ROOM_KEY);
     if (!room) {
       this.rejectSocket(ws, 'room_not_found', 'Room not found');
+      return;
+    }
+    if (
+      !room.hostHasJoined &&
+      Date.now() >= (room.createdAt ?? room.lastActivity) + HOST_JOIN_MS
+    ) {
+      await this.closeRoom('host_never_joined');
       return;
     }
     if (message.roomCode !== room.roomCode) {
@@ -450,6 +551,7 @@ export class Room implements DurableObject {
     room.lastActivity = Date.now();
     if (role === 'host') {
       room.hostHasJoined = true;
+      room.hostLastSeenAt = Date.now();
       delete room.hostMissingSince;
     }
     await this.saveRoom(room);
@@ -476,6 +578,7 @@ export class Room implements DurableObject {
     }
     const now = Date.now();
     room.lastActivity = now;
+    if (attachment.role === 'host') room.hostLastSeenAt = now;
 
     if (message.type === 'ping') {
       await this.saveRoom(room);
@@ -547,11 +650,33 @@ export class Room implements DurableObject {
 
   private async saveRoom(room: RoomRecord): Promise<void> {
     await this.state.storage.put(ROOM_KEY, room);
+    await this.scheduleAlarm(room);
+  }
+
+  private async scheduleAlarm(room: RoomRecord): Promise<void> {
+    const socketDeadline = this.state
+      .getWebSockets()
+      .map((socket) => socketAttachment(socket))
+      .filter(
+        (attachment) =>
+          !attachment.joined && attachment.connectedAt !== undefined,
+      )
+      .reduce(
+        (earliest, attachment) =>
+          Math.min(earliest, attachment.connectedAt! + SOCKET_JOIN_MS),
+        Number.POSITIVE_INFINITY,
+      );
     const nextAlarm = Math.min(
       room.lastActivity + INACTIVITY_MS,
+      room.hostHasJoined
+        ? room.hostMissingSince
+          ? Number.POSITIVE_INFINITY
+          : (room.hostLastSeenAt ?? Date.now()) + HOST_GRACE_MS
+        : (room.createdAt ?? room.lastActivity) + HOST_JOIN_MS,
       room.hostMissingSince
         ? room.hostMissingSince + HOST_GRACE_MS
         : Number.POSITIVE_INFINITY,
+      socketDeadline,
     );
     await this.state.storage.setAlarm(nextAlarm);
   }
@@ -586,6 +711,63 @@ export class Room implements DurableObject {
         // The close callback handles cleanup.
       }
     }
+  }
+}
+
+export class CreationLimiter implements DurableObject {
+  constructor(private readonly state: DurableObjectState) {}
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname !== '/consume' || request.method !== 'POST') {
+      return new Response(null, { status: 404 });
+    }
+    const now = Date.now();
+    const result = await this.state.storage.transaction(async (transaction) => {
+      const stored = await transaction.get<RateRecord>(RATE_KEY);
+      const timestamps = (stored?.timestamps ?? []).filter(
+        (timestamp) => now - timestamp < CREATION_WINDOW_MS,
+      );
+      if (timestamps.length >= MAX_CREATIONS_PER_WINDOW) {
+        return {
+          allowed: false,
+          retryAfter: Math.max(
+            1,
+            Math.ceil((timestamps[0] + CREATION_WINDOW_MS - now) / 1000),
+          ),
+          resetAt: timestamps[0] + CREATION_WINDOW_MS,
+        };
+      }
+      timestamps.push(now);
+      await transaction.put<RateRecord>(RATE_KEY, { timestamps });
+      return {
+        allowed: true,
+        retryAfter: 0,
+        resetAt: timestamps[0] + CREATION_WINDOW_MS,
+      };
+    });
+    if (!result.allowed) {
+      return new Response(null, {
+        status: 429,
+        headers: { 'Retry-After': String(result.retryAfter) },
+      });
+    }
+    await this.state.storage.setAlarm(result.resetAt);
+    return new Response(null, { status: 204 });
+  }
+
+  async alarm(): Promise<void> {
+    const now = Date.now();
+    const stored = await this.state.storage.get<RateRecord>(RATE_KEY);
+    const timestamps = (stored?.timestamps ?? []).filter(
+      (timestamp) => now - timestamp < CREATION_WINDOW_MS,
+    );
+    if (timestamps.length === 0) {
+      await this.state.storage.deleteAll();
+      return;
+    }
+    await this.state.storage.put<RateRecord>(RATE_KEY, { timestamps });
+    await this.state.storage.setAlarm(timestamps[0] + CREATION_WINDOW_MS);
   }
 }
 
