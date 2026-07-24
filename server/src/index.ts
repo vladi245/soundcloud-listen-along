@@ -48,6 +48,32 @@ const securityHeaders: Record<string, string> = {
   'X-Frame-Options': 'DENY',
 };
 
+const landingPage = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SoundCloud Listen Along Invitation</title>
+  <link rel="stylesheet" href="/landing.css">
+</head>
+<body>
+  <main>
+    <div class="signal" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <p class="label">SC // ROOM INVITATION</p>
+    <h1>Listen Along</h1>
+    <p>This link points to a private room on this self-hosted server.</p>
+    <ol>
+      <li>Install the SoundCloud Listen Along extension from the link provided by your host.</li>
+      <li>Keep this page open and select the extension from your browser toolbar.</li>
+      <li>Approve this server, open SoundCloud, and join the prepared room.</li>
+    </ol>
+    <p class="notice">The room code stays in the URL fragment and is not sent to this page. Audio remains on SoundCloud.</p>
+  </main>
+</body>
+</html>`;
+
+const landingCss = `:root{color:#f2f2f2;background:#090909;font-family:Arial,Helvetica,sans-serif}body{margin:0;min-height:100vh;display:grid;place-items:center}main{box-sizing:border-box;width:min(560px,calc(100% - 32px));padding:32px;border:1px solid #303030;border-top:3px solid #ff5500;background:#111}.signal{display:flex;align-items:center;gap:3px;height:34px}.signal i{display:block;width:3px;background:#ff5500}.signal i:nth-child(1){height:8px}.signal i:nth-child(2){height:24px}.signal i:nth-child(3){height:15px}.signal i:nth-child(4){height:30px}.label,.notice{color:#929292;font:12px SFMono-Regular,Consolas,monospace;letter-spacing:.06em}.label{color:#ff5500}h1{margin:8px 0 16px;font-size:32px;text-transform:uppercase}p,li{line-height:1.55}ol{padding-left:22px}.notice{margin-top:28px;border-top:1px solid #303030;padding-top:16px;line-height:1.5}`;
+
 export function createRoomCode(random: Uint8Array): string {
   if (random.length !== ROOM_CODE_LENGTH) {
     throw new Error('Room code entropy must be 16 bytes');
@@ -122,6 +148,16 @@ export default {
         'Access-Control-Allow-Headers': 'Authorization',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       });
+    }
+
+    if (url.pathname === '/') {
+      if (request.method !== 'GET') return methodNotAllowed('GET', origin);
+      return documentResponse(landingPage, 'text/html; charset=utf-8');
+    }
+
+    if (url.pathname === '/landing.css') {
+      if (request.method !== 'GET') return methodNotAllowed('GET', origin);
+      return documentResponse(landingCss, 'text/css; charset=utf-8');
     }
 
     if (url.pathname === '/meta') {
@@ -669,6 +705,18 @@ function emptyResponse(
     headers.append('Vary', 'Origin');
   }
   return new Response(null, { status, headers });
+}
+
+function documentResponse(body: string, contentType: string): Response {
+  return new Response(body, {
+    status: 200,
+    headers: {
+      ...securityHeaders,
+      'Content-Security-Policy':
+        "default-src 'none'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+      'Content-Type': contentType,
+    },
+  });
 }
 
 function safeEqual(left: string, right: string): boolean {

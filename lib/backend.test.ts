@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   BACKEND_SERVICE,
   backendPermission,
+  createRoomInvite,
   normalizeBackendUrl,
   parseBackendMetadata,
+  parseRoomInvite,
   roomSocketUrl,
 } from './backend';
 import { PROTOCOL_VERSION } from './protocol';
@@ -35,6 +37,34 @@ describe('backend configuration', () => {
     expect(roomSocketUrl('https://rooms.example.com', 'ABC')).toBe(
       'wss://rooms.example.com/rooms/ABC/socket',
     );
+  });
+});
+
+describe('room invitations', () => {
+  const roomCode = '0123456789ABCDEF';
+
+  it('round trips the backend and room code in a fragment', () => {
+    const invite = createRoomInvite('https://rooms.example.com', roomCode);
+    expect(invite).toBe('https://rooms.example.com/#join=0123456789ABCDEF');
+    expect(parseRoomInvite(invite)).toEqual({
+      backendUrl: 'https://rooms.example.com',
+      roomCode,
+    });
+  });
+
+  it('accepts formatted codes and rejects paths or queries', () => {
+    expect(
+      parseRoomInvite('https://rooms.example.com/#join=0123-4567-89AB-CDEF'),
+    ).toEqual({ backendUrl: 'https://rooms.example.com', roomCode });
+    expect(
+      parseRoomInvite(`https://rooms.example.com/invite#join=${roomCode}`),
+    ).toBeNull();
+    expect(
+      parseRoomInvite(`https://rooms.example.com/?track=1#join=${roomCode}`),
+    ).toBeNull();
+    expect(
+      parseRoomInvite(`https://user:pass@rooms.example.com/#join=${roomCode}`),
+    ).toBeNull();
   });
 });
 

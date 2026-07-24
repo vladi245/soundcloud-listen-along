@@ -16,7 +16,7 @@ An unofficial browser extension for synchronized listening through your own room
 
 - Creates private, unlisted rooms on an operator-deployed Cloudflare Worker.
 - Synchronizes the host's track URL, play/pause state, position, and seeks to guests.
-- Shows host or guest role, participant count, connection state, and a shareable 16-character room code.
+- Shows host or guest role, participant count, connection state, and a shareable invitation link.
 - Reconnects interrupted extension sessions and uses heartbeat timing to estimate server clock offset.
 - Remembers the selected backend locally and keeps room credentials in browser session storage; saving a host creation key is optional.
 - Relays synchronization metadata only; audio remains on SoundCloud.
@@ -57,10 +57,10 @@ The room server is a Cloudflare Worker backed by one Durable Object per room. De
 
 After deployment:
 
-1. Open the extension popup and enter the exact Worker origin printed by Wrangler, for example `https://soundcloud-listen-along-server.example.workers.dev`. Hosts also enter the operator's room creation key.
+1. Hosts open the extension popup, connect the exact Worker origin printed by Wrangler, and enter the operator's room creation key.
 2. Grant the requested optional permission for that origin.
-3. Open a SoundCloud track and accept the transmission notice.
-4. Create a room and share its code, or join a code from another participant using the same backend origin.
+3. Open a SoundCloud track, accept the transmission notice, create a room, and share its invitation link.
+4. Guests open that link and then open the extension. The popup configures the correct backend and prepares the room before opening SoundCloud.
 
 Use HTTPS for deployed backends. HTTP is accepted only for `localhost` and `127.0.0.1` development origins.
 

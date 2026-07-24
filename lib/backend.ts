@@ -1,4 +1,5 @@
 import { PROTOCOL_VERSION } from './protocol';
+import { isRoomCode, normalizeRoomCode } from './protocol';
 
 export const BACKEND_SERVICE = 'soundcloud-listen-along';
 
@@ -8,6 +9,11 @@ export interface BackendMetadata {
   maxParticipants: number;
   creationKeyRequired: boolean;
   roomCreationEnabled: boolean;
+}
+
+export interface RoomInvite {
+  backendUrl: string;
+  roomCode: string;
 }
 
 export function normalizeBackendUrl(value: string): string | null {
@@ -46,6 +52,33 @@ export function parseBackendMetadata(value: unknown): BackendMetadata | null {
     return null;
   }
   return metadata as unknown as BackendMetadata;
+}
+
+export function createRoomInvite(backendUrl: string, roomCode: string): string {
+  return `${backendUrl}/#join=${roomCode}`;
+}
+
+export function parseRoomInvite(value: string): RoomInvite | null {
+  try {
+    const url = new URL(value.trim());
+    const backendUrl = normalizeBackendUrl(url.origin);
+    const roomCode = normalizeRoomCode(
+      new URLSearchParams(url.hash.slice(1)).get('join') ?? '',
+    );
+    if (
+      !backendUrl ||
+      url.username ||
+      url.password ||
+      url.pathname !== '/' ||
+      url.search ||
+      !isRoomCode(roomCode)
+    ) {
+      return null;
+    }
+    return { backendUrl, roomCode };
+  } catch {
+    return null;
+  }
 }
 
 export function backendPermission(url: string): string {

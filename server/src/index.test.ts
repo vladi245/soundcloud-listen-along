@@ -96,3 +96,16 @@ describe('service metadata', () => {
     });
   });
 });
+
+describe('invitation landing page', () => {
+  it('serves a static page without receiving fragment credentials', async () => {
+    const response = await worker.fetch(new Request('https://rooms.example/'), {
+      ROOMS: {} as DurableObjectNamespace,
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe(
+      'text/html; charset=utf-8',
+    );
+    expect(await response.text()).toContain('SC // ROOM INVITATION');
+  });
+});
