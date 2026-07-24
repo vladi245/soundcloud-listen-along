@@ -1,4 +1,5 @@
 import {
+  PROTOCOL_VERSION,
   ROOM_CODE_LENGTH,
   isRoomCode,
   parseClientMessage,
@@ -7,6 +8,7 @@ import {
   type Role,
   type ServerMessage,
 } from '../../lib/protocol';
+import { BACKEND_SERVICE } from '../../lib/backend';
 
 const ROOM_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const TOKEN_ALPHABET =
@@ -120,6 +122,21 @@ export default {
         'Access-Control-Allow-Headers': 'Authorization',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       });
+    }
+
+    if (url.pathname === '/meta') {
+      if (request.method !== 'GET') return methodNotAllowed('GET', origin);
+      return jsonResponse(
+        {
+          service: BACKEND_SERVICE,
+          protocolVersion: PROTOCOL_VERSION,
+          maxParticipants: MAX_SOCKETS,
+          creationKeyRequired: true,
+          roomCreationEnabled: Boolean(env.ROOM_CREATION_KEY),
+        },
+        200,
+        origin,
+      );
     }
 
     if (url.pathname === '/rooms') {

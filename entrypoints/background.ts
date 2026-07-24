@@ -1,5 +1,6 @@
 import {
   normalizeBackendUrl,
+  parseBackendMetadata,
   randomOpaqueId,
   roomSocketUrl,
 } from '@/lib/backend';
@@ -30,7 +31,14 @@ interface Session {
   serverOffset: number;
 }
 
+interface BackendPreferences {
+  backendUrl: string;
+  maxParticipants: number;
+  creationKey?: string;
+}
+
 const storageKey = 'active-session';
+const preferenceKey = 'backend-preferences';
 const idleState: ExtensionState = {
   status: 'idle',
   participantCount: 0,
@@ -50,9 +58,28 @@ export default defineBackground(() => {
 
   const load = async () => {
     if (loaded) return;
-    const stored = await browser.storage.session.get(storageKey);
-    const candidate = stored[storageKey] as Session | undefined;
+    const [storedSession, storedPreferences] = await Promise.all([
+      browser.storage.session.get(storageKey),
+      browser.storage.local.get(preferenceKey),
+    ]);
+    const candidate = storedSession[storageKey] as Session | undefined;
+    const preferences = storedPreferences[preferenceKey] as
+      BackendPreferences | undefined;
     if (candidate?.public) session = candidate;
+    if (
+      preferences &&
+      normalizeBackendUrl(preferences.backendUrl) === preferences.backendUrl &&
+      Number.isInteger(preferences.maxParticipants)
+    ) {
+      if (!session.public.backendUrl) {
+        session.public.backendUrl = preferences.backendUrl;
+      }
+      if (session.public.backendUrl === preferences.backendUrl) {
+        session.public.maxParticipants = preferences.maxParticipants;
+        session.creationKey ??= preferences.creationKey;
+      }
+    }
+    session.public.hasCreationKey = Boolean(session.creationKey);
     loaded = true;
   };
 
@@ -83,11 +110,14 @@ export default defineBackground(() => {
   const clearRoom = async (error?: string) => {
     stopSocket();
     const backendUrl = session.public.backendUrl;
+    const maxParticipants = session.public.maxParticipants;
     const creationKey = session.creationKey;
     session = {
       public: {
         ...idleState,
         ...(backendUrl ? { backendUrl } : {}),
+        ...(maxParticipants ? { maxParticipants } : {}),
+        hasCreationKey: Boolean(creationKey),
         ...(error ? { status: 'error' as const, error } : {}),
       },
       sequence: 0,
@@ -247,6 +277,7 @@ export default defineBackground(() => {
       tabId,
       participantId: randomOpaqueId(),
       ...(hostToken ? { hostToken } : {}),
+      ...(session.creationKey ? { creationKey: session.creationKey } : {}),
       sequence: 0,
       serverOffset: 0,
     };
@@ -268,10 +299,38 @@ export default defineBackground(() => {
       if (request.type === 'configure-backend') {
         const backendUrl = normalizeBackendUrl(request.backendUrl);
         if (!backendUrl) throw new Error('Enter a secure backend origin');
+        const metadataResponse = await fetch(`${backendUrl}/meta`, {
+          cache: 'no-store',
+        });
+        const metadataValue: unknown = await metadataResponse
+          .json()
+          .catch(() => null);
+        const metadata = parseBackendMetadata(metadataValue);
+        if (!metadataResponse.ok || !metadata) {
+          throw new Error('Backend is unavailable or incompatible');
+        }
+        if (request.creationKey && !metadata.roomCreationEnabled) {
+          throw new Error('Backend has not enabled room creation');
+        }
         await clearRoom();
         session.creationKey = request.creationKey || undefined;
         await save();
-        await setPublic({ backendUrl });
+        await browser.storage.local.set({
+          [preferenceKey]: {
+            backendUrl,
+            maxParticipants: metadata.maxParticipants,
+            ...(request.rememberCreationKey && request.creationKey
+              ? { creationKey: request.creationKey }
+              : {}),
+          } satisfies BackendPreferences,
+        });
+        await setPublic({
+          backendUrl,
+          hasCreationKey: Boolean(session.creationKey),
+          maxParticipants: metadata.maxParticipants,
+          error: undefined,
+          status: 'idle',
+        });
       } else if (request.type === 'create-room') {
         const backendUrl = session.public.backendUrl;
         if (!backendUrl) throw new Error('Configure a backend first');

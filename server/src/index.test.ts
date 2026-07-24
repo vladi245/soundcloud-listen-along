@@ -79,3 +79,20 @@ describe('room creation authorization', () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe('service metadata', () => {
+  it('reports protocol compatibility without credentials', async () => {
+    const response = await worker.fetch(
+      new Request('https://rooms.example/meta'),
+      { ROOMS: {} as DurableObjectNamespace },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      service: 'soundcloud-listen-along',
+      protocolVersion: PROTOCOL_VERSION,
+      maxParticipants: 25,
+      creationKeyRequired: true,
+      roomCreationEnabled: false,
+    });
+  });
+});

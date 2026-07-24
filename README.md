@@ -18,7 +18,7 @@ An unofficial browser extension for synchronized listening through your own room
 - Synchronizes the host's track URL, play/pause state, position, and seeks to guests.
 - Shows host or guest role, participant count, connection state, and a shareable 16-character room code.
 - Reconnects interrupted extension sessions and uses heartbeat timing to estimate server clock offset.
-- Keeps backend selection and room credentials in browser session storage rather than persistent extension storage.
+- Remembers the selected backend locally and keeps room credentials in browser session storage; saving a host creation key is optional.
 - Relays synchronization metadata only; audio remains on SoundCloud.
 - Includes protocol validation, message-size and room-capacity limits, host authority, and automatic room cleanup.
 

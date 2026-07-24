@@ -1,5 +1,9 @@
 import './style.css';
-import { backendPermission, normalizeBackendUrl } from '@/lib/backend';
+import {
+  backendPermission,
+  normalizeBackendUrl,
+  randomOpaqueId,
+} from '@/lib/backend';
 import {
   message,
   type ExtensionState,
@@ -9,6 +13,9 @@ import { normalizeRoomCode } from '@/lib/protocol';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 let currentState: ExtensionState = { status: 'idle', participantCount: 0 };
+let setupCreationKey = '';
+
+type SetupMode = 'host' | 'guest';
 
 async function send(
   request: Parameters<typeof message>[0],
@@ -41,22 +48,87 @@ function shell(content: string): string {
   `;
 }
 
-function renderBackendForm(error?: string): void {
+function renderStart(error?: string): void {
   app.innerHTML = shell(`
     <section>
-      <span class="step">01 / Connect</span>
-      <h2>Use your room server</h2>
-      <p class="muted">Enter the origin of a deployed server from this repository.</p>
+      <span class="step">01 / Start</span>
+      <h2>Choose your role</h2>
+      <p class="muted">Host with your own room server, or join someone else's invitation.</p>
+      <div class="mode-grid">
+        <button id="host-setup" class="mode-button primary" type="button">
+          <b>Host a room</b>
+          <span>Deploy or connect a server</span>
+        </button>
+        <button id="guest-setup" class="mode-button" type="button">
+          <b>Join a room</b>
+          <span>Use a host's backend</span>
+        </button>
+      </div>
+      <p id="notice" class="notice" role="status"></p>
+    </section>
+  `);
+  if (error) document.querySelector('#notice')!.textContent = error;
+  document.querySelector('#host-setup')!.addEventListener('click', () => {
+    setupCreationKey ||= randomOpaqueId(32);
+    renderBackendForm('host');
+  });
+  document.querySelector('#guest-setup')!.addEventListener('click', () => {
+    renderBackendForm('guest');
+  });
+}
+
+function renderBackendForm(mode: SetupMode, error?: string): void {
+  const hosting = mode === 'host';
+  const newDeployment = hosting && Boolean(setupCreationKey);
+  app.innerHTML = shell(`
+    <section>
+      <button id="setup-back" class="text-button back-button" type="button">&lt; Back</button>
+      <span class="step">01 / ${hosting ? 'Host setup' : 'Join setup'}</span>
+      <h2>${hosting ? 'Connect your room server' : "Connect to the host's server"}</h2>
+      <p class="muted">${hosting ? (newDeployment ? 'Deploy a private Cloudflare room server, then enter its address below.' : 'Enter the deployed server address and its creation key.') : 'Paste the backend address provided by the host.'}</p>
+      ${
+        newDeployment
+          ? `<div class="deploy-panel">
+              <span class="panel-label">Deployment secret</span>
+              <code id="generated-key"></code>
+              <button id="copy-key" type="button">Copy key</button>
+              <a class="button-link" href="https://dash.cloudflare.com/?to=/:account/workers-and-pages" target="_blank" rel="noreferrer">Open Cloudflare</a>
+              <p>Paste this key into <code>ROOM_CREATION_KEY</code> when deploying the Worker. Cloudflare will show its address when deployment finishes.</p>
+            </div>`
+          : ''
+      }
       <form id="backend-form">
         <label for="backend">Backend origin</label>
-        <input id="backend" name="backend" type="url" placeholder="https://rooms.example.com" autocomplete="url" required>
-        <label for="creation-key">Room creation key <span class="optional">Optional for guests</span></label>
-        <input id="creation-key" name="creation-key" type="password" maxlength="128" autocomplete="off">
-        <button class="primary" type="submit">Save backend</button>
+        <input id="backend" name="backend" type="url" placeholder="https://rooms.example.workers.dev" autocomplete="url" required>
+        ${
+          hosting
+            ? `<label for="creation-key">Room creation key</label>
+               <input id="creation-key" name="creation-key" type="password" maxlength="128" autocomplete="off" required>
+               <label class="remember"><input id="remember-key" type="checkbox"><span>Remember this key on this device</span></label>`
+            : ''
+        }
+        <button class="primary" type="submit">Verify and save</button>
       </form>
       <p id="notice" class="notice" role="status"></p>
     </section>
   `);
+  document.querySelector('#setup-back')!.addEventListener('click', () => {
+    renderStart();
+  });
+  if (newDeployment) {
+    const keyInput = document.querySelector<HTMLInputElement>('#creation-key')!;
+    keyInput.value = setupCreationKey;
+    document.querySelector('#generated-key')!.textContent = setupCreationKey;
+    document.querySelector('#copy-key')!.addEventListener('click', async () => {
+      const notice = document.querySelector<HTMLParagraphElement>('#notice')!;
+      try {
+        await navigator.clipboard.writeText(setupCreationKey);
+        notice.textContent = 'Deployment key copied.';
+      } catch {
+        notice.textContent = 'Select and copy the deployment key manually.';
+      }
+    });
+  }
   const notice = document.querySelector<HTMLParagraphElement>('#notice')!;
   if (error) notice.textContent = error;
   document
@@ -65,17 +137,25 @@ function renderBackendForm(error?: string): void {
       event.preventDefault();
       const input = document.querySelector<HTMLInputElement>('#backend')!;
       const keyInput =
-        document.querySelector<HTMLInputElement>('#creation-key')!;
+        document.querySelector<HTMLInputElement>('#creation-key');
+      const rememberInput =
+        document.querySelector<HTMLInputElement>('#remember-key');
       const backendUrl = normalizeBackendUrl(input.value);
       if (!backendUrl) {
         notice.textContent = 'Use HTTPS, or HTTP on localhost for development.';
         return;
       }
       let granted: boolean;
+      let alreadyGranted: boolean;
       try {
-        granted = await browser.permissions.request({
+        alreadyGranted = await browser.permissions.contains({
           origins: [backendPermission(backendUrl)],
         });
+        granted =
+          alreadyGranted ||
+          (await browser.permissions.request({
+            origins: [backendPermission(backendUrl)],
+          }));
       } catch {
         notice.textContent = 'This backend origin cannot be permitted.';
         return;
@@ -84,13 +164,32 @@ function renderBackendForm(error?: string): void {
         notice.textContent = 'Backend access was not granted.';
         return;
       }
+      const previousBackend = currentState.backendUrl;
       const response = await send({
         type: 'configure-backend',
         backendUrl,
-        creationKey: keyInput.value,
+        creationKey: keyInput?.value ?? '',
+        rememberCreationKey: rememberInput?.checked ?? false,
       });
       currentState = response.state;
-      render();
+      if (response.ok) {
+        if (
+          previousBackend &&
+          backendPermission(previousBackend) !== backendPermission(backendUrl)
+        ) {
+          await browser.permissions.remove({
+            origins: [backendPermission(previousBackend)],
+          });
+        }
+        render();
+      } else {
+        if (!alreadyGranted) {
+          await browser.permissions.remove({
+            origins: [backendPermission(backendUrl)],
+          });
+        }
+        notice.textContent = response.state.error ?? 'Backend setup failed.';
+      }
     });
 }
 
@@ -153,7 +252,12 @@ function renderLobby(): void {
     void begin('create-room');
   });
   document.querySelector('#change-backend')!.addEventListener('click', () => {
-    renderBackendForm();
+    if (currentState.hasCreationKey) {
+      setupCreationKey = '';
+      renderBackendForm('host');
+    } else {
+      renderBackendForm('guest');
+    }
   });
   document
     .querySelector<HTMLFormElement>('#join-form')!
@@ -216,7 +320,7 @@ function renderSession(): void {
 
 function render(): void {
   if (!currentState.backendUrl) {
-    renderBackendForm(currentState.error);
+    renderStart(currentState.error);
   } else if (currentState.roomCode) {
     renderSession();
   } else {
@@ -229,7 +333,7 @@ async function refresh(): Promise<void> {
     currentState = (await send({ type: 'get-state' })).state;
     render();
   } catch {
-    renderBackendForm('Extension background is unavailable.');
+    renderStart('Extension background is unavailable.');
   }
 }
 
