@@ -59,11 +59,12 @@ describe('strict message validation', () => {
 
 describe('room creation authorization', () => {
   const rooms = {} as DurableObjectNamespace;
+  const limiter = {} as DurableObjectNamespace;
 
   it('requires server configuration', async () => {
     const response = await worker.fetch(
       new Request('https://rooms.example/rooms', { method: 'POST' }),
-      { ROOMS: rooms },
+      { ROOMS: rooms, CREATION_LIMITER: limiter },
     );
     expect(response.status).toBe(503);
   });
@@ -74,9 +75,36 @@ describe('room creation authorization', () => {
         method: 'POST',
         headers: { Authorization: 'Bearer wrong-key' },
       }),
-      { ROOMS: rooms, ROOM_CREATION_KEY: 'correct-key' },
+      {
+        ROOMS: rooms,
+        CREATION_LIMITER: limiter,
+        ROOM_CREATION_KEY: 'correct-key',
+      },
     );
     expect(response.status).toBe(401);
+  });
+
+  it('validates the request before consuming creation quota', async () => {
+    let limiterUsed = false;
+    const response = await worker.fetch(
+      new Request('https://rooms.example/rooms', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer correct-key' },
+        body: 'unexpected',
+      }),
+      {
+        ROOMS: rooms,
+        CREATION_LIMITER: {
+          get() {
+            limiterUsed = true;
+            throw new Error('Limiter should not be called');
+          },
+        } as unknown as DurableObjectNamespace,
+        ROOM_CREATION_KEY: 'correct-key',
+      },
+    );
+    expect(response.status).toBe(400);
+    expect(limiterUsed).toBe(false);
   });
 });
 
@@ -84,7 +112,10 @@ describe('service metadata', () => {
   it('reports protocol compatibility without credentials', async () => {
     const response = await worker.fetch(
       new Request('https://rooms.example/meta'),
-      { ROOMS: {} as DurableObjectNamespace },
+      {
+        ROOMS: {} as DurableObjectNamespace,
+        CREATION_LIMITER: {} as DurableObjectNamespace,
+      },
     );
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -101,6 +132,7 @@ describe('invitation landing page', () => {
   it('serves a static page without receiving fragment credentials', async () => {
     const response = await worker.fetch(new Request('https://rooms.example/'), {
       ROOMS: {} as DurableObjectNamespace,
+      CREATION_LIMITER: {} as DurableObjectNamespace,
     });
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe(
