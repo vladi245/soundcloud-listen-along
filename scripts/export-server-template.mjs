@@ -1,4 +1,13 @@
-import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  cp,
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -16,6 +25,16 @@ if (
 }
 
 await mkdir(target, { recursive: true });
+if ((await lstat(target)).isSymbolicLink()) {
+  throw new Error('Target must not be a symbolic link');
+}
+const relativeParent = path.relative(
+  '/tmp/opencode',
+  await realpath(path.dirname(target)),
+);
+if (relativeParent.startsWith('..') || path.isAbsolute(relativeParent)) {
+  throw new Error('Target parent resolves outside /tmp/opencode');
+}
 const existing = await readdir(target);
 const owned =
   existing.every((entry) => entry === '.git') ||
@@ -40,7 +59,7 @@ const copy = (source, destination = source) =>
   });
 
 await Promise.all([
-  copy('.prettierrc.json'),
+  copy('prettier.config.mjs'),
   copy('LICENSE'),
   copy('lib/backend.ts'),
   copy('lib/protocol.ts'),
@@ -49,6 +68,14 @@ await Promise.all([
   copy('server/src', 'server/src'),
   copy('server/vitest.config.ts', 'vitest.config.ts'),
 ]);
+
+const privacy = (await readFile(path.join(root, 'docs/privacy.md'), 'utf8'))
+  .replace('open-source extension', 'browser extension')
+  .replace(
+    'These are engineering and transparency guidelines, not legal advice. See [compliance](compliance.md).',
+    'These are engineering and transparency guidelines, not legal advice.',
+  );
+await writeFile(path.join(staging, 'PRIVACY.md'), privacy);
 
 const packageJson = JSON.parse(
   await readFile(path.join(root, 'server/package.json'), 'utf8'),
@@ -149,6 +176,8 @@ For local development, copy \`.dev.vars.example\` to \`.dev.vars\`, replace the 
 - Audio remains on SoundCloud; the backend relays track URLs and playback synchronization data only.
 - Rooms expire automatically, and room creation is rate limited without storing client IP addresses in application storage.
 - Cloudflare account logs and retention remain the deploying operator's responsibility.
+
+The extension's public [privacy policy](PRIVACY.md) describes its local and backend data handling.
 
 This repository is an automatically exported deployment subset and contains no extension code or credentials.
 

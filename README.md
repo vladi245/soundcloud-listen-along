@@ -40,6 +40,8 @@ The Chromium build is written to `.output/chrome-mv3/`. Other available commands
 
 ## Browser installation
 
+Unlisted Chrome Web Store and AMO-signed Firefox distribution is being prepared. Until those listings are approved, the following development installation paths remain available.
+
 ### Chromium
 
 1. Open `chrome://extensions` in Chrome, Chromium, or Brave, or `edge://extensions` in Edge.

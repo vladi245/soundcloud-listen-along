@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -22,8 +24,24 @@ jobs:
       - run: sha256sum .output/*.zip > .output/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
-          name: extension-release-${{ github.ref_name }}
+          name: extension-release-${{ github.run_id }}
           path: |
             .output/*.zip
             .output/SHA256SUMS
           if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag' && github.event.repository.private
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: extension-release-${{ github.run_id }}
+          path: .output
+      - name: Create maintainer release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" .output/*.zip .output/SHA256SUMS --repo "${{ github.repository }}" --verify-tag --generate-notes
