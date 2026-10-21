@@ -15,12 +15,18 @@ import {
 } from '@/lib/messages';
 import { normalizeRoomCode } from '@/lib/protocol';
 import { describeTrack } from '@/lib/track';
+import {
+  isNewerVersion,
+  parseLatestRelease,
+  type LatestRelease,
+} from '@/lib/version';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 let currentState: ExtensionState = { status: 'idle', participantCount: 0 };
 let setupCreationKey = '';
 let activeInvite: RoomInvite | null = null;
 let onSoundCloud = false;
+let update: LatestRelease | null = null;
 let sessionNotice = '';
 let sessionNoticeUntil = 0;
 
@@ -69,6 +75,18 @@ function shell(content: string): string {
       <span class="brand">Listen Along</span>
       <span class="server">${server}</span>
     </header>
+    ${
+      update
+        ? `<div class="update">
+            <p><b>Update available</b> · version ${update.version}</p>
+            <p class="fine">Download it, unzip it over your current extension folder, then select reload on Listen Along in the extensions page.</p>
+            <div class="row">
+              <a class="btn btn-primary btn-small" href="${update.download}" target="_blank" rel="noreferrer">Download</a>
+              <button id="open-extensions" class="btn btn-small" type="button">Open extensions page</button>
+            </div>
+          </div>`
+        : ''
+    }
     <main class="body">${content}</main>
     <footer class="foot">Unofficial extension. Audio plays from SoundCloud.</footer>
   `;
@@ -461,6 +479,31 @@ function render(): void {
   }
 }
 
+// Unpacked Chromium installs never update themselves, so tell the user when
+// the public server has a newer release. Firefox builds update automatically.
+async function checkForUpdate(): Promise<void> {
+  if (import.meta.env.FIREFOX || !HOSTED_BACKEND_URL) return;
+  try {
+    const response = await fetch(`${HOSTED_BACKEND_URL}/version.json`, {
+      cache: 'no-store',
+    });
+    if (!response.ok) return;
+    const latest = parseLatestRelease(
+      await response.json(),
+      HOSTED_BACKEND_URL,
+    );
+    if (
+      latest &&
+      isNewerVersion(latest.version, browser.runtime.getManifest().version)
+    ) {
+      update = latest;
+      render();
+    }
+  } catch {
+    // No notice when the server is unreachable.
+  }
+}
+
 async function refresh(): Promise<void> {
   try {
     let tab: Awaited<ReturnType<typeof inspectActiveTab>>;
@@ -476,7 +519,17 @@ async function refresh(): Promise<void> {
   }
 }
 
+// Delegated, since every view re-renders the update banner.
+document.addEventListener('click', (event) => {
+  if ((event.target as Element).closest('#open-extensions')) {
+    void browser.tabs.create({
+      url: `chrome://extensions/?id=${browser.runtime.id}`,
+    });
+  }
+});
+
 void refresh();
+void checkForUpdate();
 setInterval(() => {
   if (currentState.roomCode) void refresh();
 }, 1_000);
