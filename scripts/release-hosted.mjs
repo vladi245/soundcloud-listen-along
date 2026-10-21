@@ -15,13 +15,17 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import path from 'node:path';
-import { stderr, stdout } from 'node:process';
+import process, { stderr, stdout } from 'node:process';
 
 const root = path.resolve(import.meta.dirname, '..');
 const assets = path.join(root, 'server/hosted-assets');
 const output = path.join(root, '.output');
-const run = (command, args) =>
-  execFileSync(command, args, { cwd: root, stdio: 'inherit' });
+const run = (command, args, env = {}) =>
+  execFileSync(command, args, {
+    cwd: root,
+    stdio: 'inherit',
+    env: { ...process.env, ...env },
+  });
 
 const { version } = JSON.parse(
   await readFile(path.join(root, 'package.json'), 'utf8'),
@@ -49,18 +53,25 @@ await writeFile(
 if (credentials.AMO_JWT_ISSUER && credentials.AMO_JWT_SECRET) {
   const signed = path.join(output, 'signed');
   await rm(signed, { recursive: true, force: true });
-  run('npx', [
-    '--yes',
-    'web-ext@10.8.0',
-    'sign',
-    '--channel=unlisted',
-    `--source-dir=${path.join(output, 'firefox-mv3')}`,
-    `--artifacts-dir=${signed}`,
-    `--upload-source-code=${path.join(output, `soundcloud-listen-along-${version}-sources.zip`)}`,
-    `--api-key=${credentials.AMO_JWT_ISSUER}`,
-    `--api-secret=${credentials.AMO_JWT_SECRET}`,
-    '--approval-timeout=1800000',
-  ]);
+  run(
+    'npx',
+    [
+      '--yes',
+      'web-ext@10.8.0',
+      'sign',
+      '--channel=unlisted',
+      `--source-dir=${path.join(output, 'firefox-mv3')}`,
+      `--artifacts-dir=${signed}`,
+      `--upload-source-code=${path.join(output, `soundcloud-listen-along-${version}-sources.zip`)}`,
+      '--approval-timeout=1800000',
+    ],
+    // Pass credentials through the environment so they never appear in
+    // process listings or in the command echoed by a failure.
+    {
+      WEB_EXT_API_KEY: credentials.AMO_JWT_ISSUER,
+      WEB_EXT_API_SECRET: credentials.AMO_JWT_SECRET,
+    },
+  );
   const xpi = (await readdir(signed)).find((name) => name.endsWith('.xpi'));
   if (!xpi) throw new Error('Signing produced no .xpi file');
   await copyFile(path.join(signed, xpi), path.join(assets, 'listen-along.xpi'));
