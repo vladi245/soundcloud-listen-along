@@ -7,6 +7,13 @@ export default defineConfig({
     description:
       'Listen to SoundCloud together in private, synchronized rooms.',
     incognito: 'not_allowed',
+    action: {
+      default_icon: {
+        16: 'icon/16.png',
+        32: 'icon/32.png',
+        48: 'icon/48.png',
+      },
+    },
     permissions: ['activeTab', 'storage'],
     ...(HOSTED_BACKEND_URL
       ? { host_permissions: [`${HOSTED_BACKEND_URL}/*`] }
