@@ -444,10 +444,14 @@ function renderSession(): void {
       <span id="role" class="sub"></span>
     </div>
     <button id="copy-code" class="btn btn-primary" type="button">Copy invite link</button>
-    <div class="members">
-      <span class="label">In this room</span>
-      <ul id="members"></ul>
-    </div>
+    ${
+      currentState.participants?.length
+        ? `<div class="members">
+            <span class="label">In this room</span>
+            <ul id="members"></ul>
+          </div>`
+        : ''
+    }
     ${nicknameField()}
     <p id="notice" class="notice" role="status"></p>
     <button id="leave" class="btn btn-secondary" type="button">Leave room</button>
