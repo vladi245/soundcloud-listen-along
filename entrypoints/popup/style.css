@@ -46,6 +46,25 @@ body {
 
 /* Layout */
 
+.update {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 16px 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--orange);
+  border-radius: 3px;
+  background: var(--surface);
+}
+
+.update p {
+  margin: 0;
+}
+
+.update .btn-small {
+  display: inline-block;
+}
+
 .top {
   display: flex;
   align-items: center;

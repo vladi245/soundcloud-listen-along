@@ -40,6 +40,11 @@ await copyFile(
   path.join(output, `soundcloud-listen-along-${version}-chrome.zip`),
   path.join(assets, 'listen-along-chrome.zip'),
 );
+// Unpacked Chromium installs read this to offer updates.
+await writeFile(
+  path.join(assets, 'version.json'),
+  `${JSON.stringify({ version, download: '/listen-along-chrome.zip' }, null, 2)}\n`,
+);
 
 if (credentials.AMO_JWT_ISSUER && credentials.AMO_JWT_SECRET) {
   const signed = path.join(output, 'signed');
