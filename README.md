@@ -1,134 +1,57 @@
-# SoundCloud Listen Along
+<p align="center">
+  <img src="docs/logo.png" width="112" height="112" alt="Listen Along logo">
+</p>
 
-An unofficial browser extension for listening to SoundCloud together. Start a room in one click and share the link.
+<h1 align="center">Listen Along</h1>
 
-`MVP IMPLEMENTED` | `PUBLIC ROOM SERVER` | `SELF-HOSTING OPTIONAL`
+<p align="center">
+  Listen to SoundCloud together. Start a room from any track, share the link,<br>
+  and everyone hears what you play, in sync.
+</p>
 
-[![Project status: MVP](https://img.shields.io/badge/status-MVP-C65D28)](https://github.com/vladi245/soundcloud-listen-along)
-[![Chromium: unpacked](https://img.shields.io/badge/Chromium-unpacked-3B6EA8)](#browser-installation)
-[![Firefox: development build](https://img.shields.io/badge/Firefox-development_build-7651A8)](#firefox)
-[![License: MIT](https://img.shields.io/badge/license-MIT-2E7D68)](LICENSE)
+<p align="center">
+  <a href="https://soundcloud-listen-along.vladi245.workers.dev"><b>Install</b></a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#privacy">Privacy</a> ·
+  <a href="docs/deployment.md">Self-hosting</a>
+</p>
 
-> [!WARNING]
-> This is an early MVP, not a production-ready service. Player integration can break when SoundCloud changes its page, and browser autoplay rules may require a guest to start playback once.
+<p align="center">
+  <img src="docs/store/screenshot-session.png" width="720" alt="The extension popup showing a room that is playing a track">
+</p>
 
-## Features
+## How it works
 
-- Creates private, unlisted rooms on the public room server with no account or setup, or on a Cloudflare Worker you deploy yourself.
-- Invitation links open SoundCloud and join the room automatically.
-- Synchronizes the host's track URL, play/pause state, position, and seeks to guests.
-- Shows host or guest role, participant count, connection state, and a shareable invitation link.
-- Reconnects interrupted extension sessions and uses heartbeat timing to estimate server clock offset.
-- Remembers the selected backend locally and keeps room credentials in browser session storage; saving a host creation key is optional.
-- Relays synchronization metadata only; audio remains on SoundCloud.
-- Includes protocol validation, message-size and room-capacity limits, host authority, and automatic room cleanup.
+1. **Host:** open a track on SoundCloud, click the extension and select **Start a room**. The invite link is copied for you.
+2. **Friends:** open the link and select **Join room**. SoundCloud opens and plays along with you.
+3. Play, pause, seek or skip as usual. Everyone in the room follows.
 
-Current limitations include one host per room, up to 25 WebSocket connections, no room password beyond possession of the room code, and no room discovery.
+No accounts and no setup. Audio always streams from SoundCloud in each listener's own browser; the extension only keeps playback in step.
 
-## Installation
+## Install
 
-Requirements: Node.js 22 or newer and npm.
+Open the [install page](https://soundcloud-listen-along.vladi245.workers.dev) in your browser:
+
+- **Firefox:** select **Install for Firefox**. Updates install automatically.
+- **Chrome, Edge, Brave:** follow the load-unpacked steps on the page.
+
+## Privacy
+
+While you are in a room, the extension shares only the current track link and playback position with the room server. Rooms are private, unlisted and deleted when they end. There are no accounts, ads, analytics or tracking. See the [privacy policy](https://soundcloud-listen-along.vladi245.workers.dev/privacy) and [privacy notes](docs/privacy.md).
+
+## Development
+
+Requires Node.js 22 or newer.
 
 ```sh
-git clone https://github.com/vladi245/soundcloud-listen-along.git
-cd soundcloud-listen-along
 npm ci
-npm run check
-npm run build
+npm run dev          # Chromium with live reload (dev:firefox for Firefox)
+npm run check        # format, lint, types and tests
+npm run build:all    # production builds in .output/
 ```
 
-The Chromium build is written to `.output/chrome-mv3/`. Other available commands are `npm run dev`, `npm run dev:firefox`, `npm run build:firefox`, `npm run zip`, and `npm run zip:firefox`.
+The room server is a Cloudflare Worker with one Durable Object per room. Run it locally with `npm --prefix server run dev`, deploy your own with the [deployment guide](docs/deployment.md), and release with `npm run release:hosted`. See also the [architecture](docs/architecture.md) and [contributing guide](CONTRIBUTING.md).
 
-## Browser installation
+## License
 
-Unlisted Chrome Web Store and AMO-signed Firefox distribution is being prepared. Until those listings are approved, the following development installation paths remain available.
-
-### Chromium
-
-1. Open `chrome://extensions` in Chrome, Chromium, or Brave, or `edge://extensions` in Edge.
-2. Enable **Developer mode**.
-3. Select **Load unpacked** and choose `.output/chrome-mv3/`.
-4. Rebuild and reload the extension after pulling changes; unpacked extensions do not update automatically.
-
-### Firefox
-
-Run `npm run build:firefox`, open `about:debugging#/runtime/this-firefox`, select **Load Temporary Add-on**, and choose `.output/firefox-mv3/manifest.json`. This temporary development installation is removed when Firefox closes. There is no signed Firefox build currently available.
-
-## Usage
-
-1. Open a SoundCloud track, open the extension, and select **Start a room**. The invitation link is copied automatically.
-2. Guests open the link, select the extension, and choose **Join room**. SoundCloud opens and follows the host.
-
-Rooms run on the public room server by default. Each room is its own Cloudflare Durable Object, created on demand and deleted when the room ends.
-
-## Self-hosting
-
-The room server is a Cloudflare Worker backed by one Durable Object per room. To use your own instead of the public one, deploy it under your Cloudflare account by following [the deployment guide](docs/deployment.md) and choose **Use own server** in the popup.
-
-After deployment:
-
-1. Hosts open the extension popup, connect the exact Worker origin printed by Wrangler, and enter the operator's room creation key.
-2. Grant the requested optional permission for that origin.
-3. Open a SoundCloud track, accept the transmission notice, create a room, and share its invitation link.
-4. Guests open that link and then open the extension. The popup configures the correct backend and prepares the room before opening SoundCloud.
-
-Use HTTPS for deployed backends. HTTP is accepted only for `localhost` and `127.0.0.1` development origins.
-
-## Architecture
-
-```mermaid
-flowchart LR
-    user([Listener])
-
-    subgraph browser[Participant browser]
-        popup[Extension popup]
-        background[Background worker]
-
-        subgraph tab[SoundCloud tab]
-            page[SoundCloud page]
-            content[Content script]
-            player[Native audio player]
-        end
-
-        popup -->|Room commands| background
-        content -->|Validated local playback| background
-        background -->|Validated remote playback| content
-        content <-->|Observe and control| player
-        page -->|Streams audio| player
-    end
-
-    subgraph operator[Self-hosting operator]
-        worker[Cloudflare Worker]
-        room[Room Durable Object]
-        state[(Current snapshot)]
-
-        worker -->|Route by room code| room
-        room -->|Ephemeral state| state
-    end
-
-    user --> popup
-    user --> page
-    background -->|HTTPS room creation| worker
-    background <-->|WSS room protocol| worker
-
-    classDef extension fill:#1f231d,stroke:#bdf56f,color:#f6f3ea
-    classDef service fill:#242822,stroke:#9ca396,color:#f6f3ea
-    class popup,background,content extension
-    class worker,room,state service
-```
-
-The content script observes SoundCloud's audio element and applies guest playback changes. The background worker owns session state, backend access, WebSocket reconnection, and protocol validation. The Worker creates rooms and routes each room to a Durable Object, which validates participants, grants control only to the host token holder, stores the latest playback snapshot, and broadcasts room state.
-
-See [architecture](docs/architecture.md), [privacy](docs/privacy.md), and [compliance notes](docs/compliance.md).
-
-## Contributing and security
-
-- Read the [contributing guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
-- Use [issues](https://github.com/vladi245/soundcloud-listen-along/issues) for bugs and scoped proposals.
-- Report vulnerabilities through the private process in [SECURITY.md](SECURITY.md).
-
-## License and notice
-
-Released under the [MIT License](LICENSE).
-
-This independent project is not affiliated with, authorized by, sponsored by, or endorsed by SoundCloud or its affiliates. "SoundCloud" is used only to describe compatibility. SoundCloud and related marks belong to their respective owners.
+[MIT](LICENSE). Listen Along is an independent project and is not affiliated with, authorized by, sponsored by or endorsed by SoundCloud. "SoundCloud" is used only to describe compatibility.
