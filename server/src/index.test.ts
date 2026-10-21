@@ -156,6 +156,33 @@ describe('invitation landing page', () => {
     expect(html).toContain('href="https://example.com/install?a=%22b%22"');
   });
 
+  it('serves the privacy policy', async () => {
+    const response = await worker.fetch(
+      new Request('https://rooms.example/privacy'),
+      {
+        ROOMS: {} as DurableObjectNamespace,
+        CREATION_LIMITER: {} as DurableObjectNamespace,
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('What the extension sends');
+  });
+
+  it('prefers a Chrome Web Store listing over load-unpacked steps', async () => {
+    const response = await worker.fetch(new Request('https://rooms.example/'), {
+      ROOMS: {} as DurableObjectNamespace,
+      CREATION_LIMITER: {} as DurableObjectNamespace,
+      CHROME_STORE_URL:
+        'https://chromewebstore.google.com/detail/listen-along/abc',
+      ASSETS: {
+        fetch: async () => new Response(null, { status: 200 }),
+      } as unknown as Fetcher,
+    });
+    const html = await response.text();
+    expect(html).toContain('Add to Chrome');
+    expect(html).not.toContain('Load unpacked');
+  });
+
   it('offers hosted extension packages', async () => {
     const response = await worker.fetch(new Request('https://rooms.example/'), {
       ROOMS: {} as DurableObjectNamespace,

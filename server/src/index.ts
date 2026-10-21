@@ -34,6 +34,7 @@ interface Env {
   PUBLIC_ROOM_CREATION?: string;
   MAX_ROOM_CREATIONS_PER_MINUTE?: string;
   INSTALL_URL?: string;
+  CHROME_STORE_URL?: string;
   ASSETS?: Fetcher;
 }
 
@@ -67,6 +68,9 @@ const securityHeaders: Record<string, string> = {
   'X-Frame-Options': 'DENY',
 };
 
+// The extension's mascot, inlined so the pages need no image requests.
+const logoMark = `<svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" aria-hidden="true"><rect width="128" height="128" rx="28" fill="#ff5500"/><path d="M25 78a39 39 0 0 1 78 0" fill="none" stroke="#2b2b2b" stroke-width="7" stroke-linecap="round"/><g fill="#fff"><circle cx="40" cy="79" r="17"/><circle cx="61" cy="64" r="26"/><circle cx="88" cy="76" r="20"/><rect x="40" y="72" width="48" height="24"/></g><rect x="17" y="68" width="15" height="26" rx="7" fill="#2b2b2b"/><rect x="96" y="68" width="15" height="26" rx="7" fill="#2b2b2b"/><g fill="none" stroke="#2b2b2b" stroke-width="3.6" stroke-linecap="round"><path d="M49 76q5-6 10 0"/><path d="M69 76q5-6 10 0"/><path d="M58 84q6 6 12 0"/></g><ellipse cx="47" cy="85" rx="4.5" ry="3" fill="#ff8a5c" opacity="0.6"/><ellipse cx="81" cy="85" rx="4.5" ry="3" fill="#ff8a5c" opacity="0.6"/></svg>`;
+
 const landingPage = `<!doctype html>
 <html lang="en">
 <head>
@@ -79,7 +83,7 @@ const landingPage = `<!doctype html>
 </head>
 <body>
   <main>
-    <p class="brand"><span class="mark" aria-hidden="true"></span>Listen Along</p>
+    <p class="brand">${logoMark}Listen Along</p>
     <h1 data-view="invite">You're invited to listen together</h1>
     <h1 data-view="home" hidden>Listen to SoundCloud together</h1>
     <p data-view="home" class="intro" hidden>Start a room from any SoundCloud track and share the link. Everyone in the room hears what you play, in sync.</p>
@@ -107,6 +111,41 @@ const landingPage = `<!doctype html>
 </body>
 </html>`;
 
+const privacyPage = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Listen Along privacy</title>
+  <link rel="stylesheet" href="/landing.css">
+</head>
+<body>
+  <main class="policy">
+    <p class="brand">${logoMark}Listen Along</p>
+    <h1>Privacy</h1>
+    <p>This page covers the SoundCloud Listen Along browser extension and the public room server it uses by default. Both are run by the extension's developer, an independent individual not affiliated with SoundCloud.</p>
+    <h2>What the extension sends</h2>
+    <p>Only while you are in a room, the extension sends the room server:</p>
+    <ul>
+      <li>the link of the SoundCloud track playing in the room's tab;</li>
+      <li>whether it is playing or paused, its position, and seeks or track changes;</li>
+      <li>a random room code, a random participant ID, and for hosts a random host token.</li>
+    </ul>
+    <p>It sends no SoundCloud account details, cookies, passwords, names, email addresses, messages or audio. Audio streams from SoundCloud directly to each listener.</p>
+    <h2>What the server keeps</h2>
+    <p>Each room stores its code, host token, latest playback state and activity times. A room is deleted when the host leaves, five minutes after creation if the host never joins, one minute after the host disconnects, or after six hours without activity.</p>
+    <p>To limit abuse, the server counts room creations per client under a hash of the IP address combined with the current hour, kept for one minute. The IP address itself is not stored.</p>
+    <p>The server runs on Cloudflare, which processes connection data such as IP addresses to deliver the service. Request logging for this server is turned off.</p>
+    <h2>What stays in your browser</h2>
+    <p>The extension remembers the selected room server and, for the current browser session, the active room. Nothing is used for advertising, analytics or profiling, and nothing is sold or shared.</p>
+    <h2>Your choices</h2>
+    <p>Leaving a room or closing its tab stops all sending. Removing the extension deletes its local data. You can also use your own room server instead of the public one.</p>
+    <p class="fine">Last updated October 2026.</p>
+  </main>
+</body>
+</html>`;
+
 // Shows the home or invitation copy. The room code stays in the fragment.
 const landingJs = `const invite = new URLSearchParams(location.hash.slice(1)).has('join');
 for (const element of document.querySelectorAll('[data-view]')) {
@@ -116,7 +155,7 @@ if (!invite) document.title = 'Listen Along';
 addEventListener('hashchange', () => location.reload());
 `;
 
-const landingCss = `:root{--orange:#f50;--bg:#fff;--text:#333;--muted:#999;--line:#e5e5e5;color:var(--text);background:var(--bg);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}@media (prefers-color-scheme:dark){:root{--bg:#121212;--text:#f2f2f2;--muted:#8c8c8c;--line:#2b2b2b}}body{margin:0;min-height:100vh;display:grid;place-items:center}main{box-sizing:border-box;width:min(480px,calc(100% - 32px));padding:32px 0}.brand{display:flex;align-items:center;gap:8px;margin:0 0 24px;font-weight:600}.mark{width:16px;height:16px;border-radius:3px;background:var(--orange)}h1{margin:0 0 20px;font-size:24px;font-weight:600;line-height:1.3}h2{margin:20px 0 8px;font-size:15px;font-weight:600}[hidden]{display:none!important}.intro{margin:-8px 0 8px;color:var(--muted)}.has-extension{display:none}[data-extension] .has-extension{display:block}[data-extension] .needs-install{display:none}.has-extension p+p{margin-top:16px}p{margin:0}.button{display:inline-block;height:40px;padding:0 24px;border-radius:3px;color:#fff;background:var(--orange);font-weight:600;line-height:40px;text-decoration:none}.button:hover{background:#e64d00}details{margin-top:12px;color:var(--muted);font-size:14px}summary{cursor:pointer}details ol{margin-top:8px;color:var(--text)}code{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}ol{margin:0;padding-left:20px}li{margin:6px 0}a{color:var(--orange)}.fine{margin:24px 0 0;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}`;
+const landingCss = `:root{--orange:#f50;--bg:#fff;--text:#333;--muted:#999;--line:#e5e5e5;color:var(--text);background:var(--bg);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}@media (prefers-color-scheme:dark){:root{--bg:#121212;--text:#f2f2f2;--muted:#8c8c8c;--line:#2b2b2b}}body{margin:0;min-height:100vh;display:grid;place-items:center}main{box-sizing:border-box;width:min(480px,calc(100% - 32px));padding:32px 0}.brand{display:flex;align-items:center;gap:8px;margin:0 0 24px;font-weight:600}.mark{width:28px;height:28px}h1{margin:0 0 20px;font-size:24px;font-weight:600;line-height:1.3}h2{margin:20px 0 8px;font-size:15px;font-weight:600}[hidden]{display:none!important}.intro{margin:-8px 0 8px;color:var(--muted)}.has-extension{display:none}[data-extension] .has-extension{display:block}[data-extension] .needs-install{display:none}.has-extension p+p{margin-top:16px}.second{margin-top:10px}p{margin:0}.button{display:inline-block;height:40px;padding:0 24px;border-radius:3px;color:#fff;background:var(--orange);font-weight:600;line-height:40px;text-decoration:none}.button:hover{background:#e64d00}details{margin-top:12px;color:var(--muted);font-size:14px}summary{cursor:pointer}details ol{margin-top:8px;color:var(--text)}code{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}ol{margin:0;padding-left:20px}li{margin:6px 0}a{color:var(--orange)}.fine{margin:24px 0 0;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}#join-button{height:40px;padding:0 24px;border:0;border-radius:3px;color:#fff;background:var(--orange);font:inherit;font-weight:600;cursor:pointer}#join-button:hover{background:#e64d00}#join-button:disabled{opacity:.5;cursor:default}.status{margin:12px 0 0;color:var(--orange);font-size:14px}.status:empty{display:none}#join .fine{border-top:0;padding-top:0;margin-top:12px}.policy h2{margin-top:28px}.policy p,.policy li{color:var(--text)}.policy ul{margin:8px 0 0;padding-left:20px}.policy p+p{margin-top:10px}`;
 
 export function createRoomCode(random: Uint8Array): string {
   if (random.length !== ROOM_CODE_LENGTH) {
@@ -200,6 +239,11 @@ export default {
         await renderLandingPage(env),
         'text/html; charset=utf-8',
       );
+    }
+
+    if (url.pathname === '/privacy') {
+      if (request.method !== 'GET') return methodNotAllowed('GET', origin);
+      return documentResponse(privacyPage, 'text/html; charset=utf-8');
     }
 
     if (url.pathname === '/landing.js') {
@@ -896,11 +940,15 @@ async function installInstructions(env: Env): Promise<string> {
       ? `<p><a class="button" href="${escapeHtml(url)}" rel="noreferrer">Get the extension</a></p>`
       : '<p>Use the install link from the person who invited you.</p>';
   }
+  const chromeStore = httpsUrl(env.CHROME_STORE_URL);
   return [
     firefox
       ? `<p><a class="button" href="${FIREFOX_PACKAGE}">Install for Firefox</a></p>`
       : '',
-    chromium
+    chromeStore
+      ? `<p class="${firefox ? 'second' : ''}"><a class="button" href="${escapeHtml(chromeStore)}" rel="noreferrer">Add to Chrome</a></p>`
+      : '',
+    chromium && !chromeStore
       ? `<details${firefox ? '' : ' open'}>
         <summary>Using Chrome, Edge or Brave?</summary>
         <ol>

@@ -8,7 +8,8 @@ workers_dev = true
 [vars]
 PUBLIC_ROOM_CREATION = "true"
 MAX_ROOM_CREATIONS_PER_MINUTE = "120"
-# INSTALL_URL = "https://chromewebstore.google.com/detail/..."
+# Set once the unlisted Chrome Web Store listing is approved.
+# CHROME_STORE_URL = "https://chromewebstore.google.com/detail/..."
 
 # Extension packages and the Firefox update manifest, written by
 # `npm run release:hosted` in the repository root.
