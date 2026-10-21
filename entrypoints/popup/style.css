@@ -295,7 +295,6 @@ input#room-code {
 
 /* Panels */
 
-.panel,
 .code-box {
   display: flex;
   flex-direction: column;
@@ -303,12 +302,6 @@ input#room-code {
   padding: 12px;
   border-radius: 3px;
   background: var(--surface);
-}
-
-.key {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 .code {

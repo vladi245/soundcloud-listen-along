@@ -67,7 +67,7 @@ This setting is an origin filter, not participant authentication. Guests are adm
 
 ## Room creation key
 
-The Worker requires an operator-defined secret before it creates rooms. From `server/`, set it without writing it to the repository:
+The Worker requires an operator-defined secret before it creates rooms. Generate a long random value, for example with `openssl rand -base64 32`, and from `server/` set it without writing it to the repository:
 
 ```sh
 npx wrangler secret put ROOM_CREATION_KEY
