@@ -138,7 +138,7 @@ const privacyPage = `<!doctype html>
     <p>To limit abuse, the server counts room creations per client under a hash of the IP address combined with the current hour, kept for one minute. The IP address itself is not stored.</p>
     <p>The server runs on Cloudflare, which processes connection data such as IP addresses to deliver the service. Request logging for this server is turned off.</p>
     <h2>What stays in your browser</h2>
-    <p>The extension remembers the selected room server and, for the current browser session, the active room. Nothing is used for advertising, analytics or profiling, and nothing is sold or shared.</p>
+    <p>The extension remembers the selected room server, a room creation key for your own server only if you choose to save it, and, for the current browser session, the active room. Nothing is used for advertising, analytics or profiling, and nothing is sold or shared.</p>
     <h2>Your choices</h2>
     <p>Leaving a room or closing its tab stops all sending. Removing the extension deletes its local data. You can also use your own room server instead of the public one.</p>
     <p class="fine">Last updated October 2026.</p>

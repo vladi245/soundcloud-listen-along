@@ -11,7 +11,7 @@ npx wrangler login
 npm run deploy:hosted
 ```
 
-Copy the printed `https://...workers.dev` origin into `HOSTED_BACKEND_URL` in `lib/hosted.ts`; the extension manifest grants host access to that origin automatically. Optionally set `INSTALL_URL` in `wrangler.hosted.toml` to the store listing so invitation pages link to it, then redeploy. Set `HOSTED_BACKEND_URL` to `null` to build an extension with no default server.
+Copy the printed `https://...workers.dev` origin into `HOSTED_BACKEND_URL` in `lib/hosted.ts`; the extension manifest grants host access to that origin automatically. Optionally set `INSTALL_URL` in `wrangler.hosted.toml` to an external install page for servers that do not host the packages themselves, then redeploy. Set `HOSTED_BACKEND_URL` to `null` to build an extension with no default server.
 
 ### Extension packages
 
@@ -28,9 +28,7 @@ Raise `version` in `package.json` before every release; AMO signs each version o
 
 ## Self-hosted deployment
 
-The server is a Cloudflare Worker backed by the `Room` Durable Object. It must be deployed by each operator under that operator's Cloudflare account. The project does not run a central service or fallback relay.
-
-For setup without a terminal, use the extension's **Deploy to Cloudflare** action. It opens the public, backend-only deployment template, provisions both Durable Object bindings, and requests the generated room creation key. The source repository for that template is [soundcloud-listen-along-server](https://github.com/vladi245/soundcloud-listen-along-server).
+Instead of the public server, anyone can run the same Worker in their own Cloudflare account. A self-hosted server requires a room creation key by default, so only people with the key can start rooms; guests join with the invitation link alone.
 
 ## Requirements
 
@@ -97,13 +95,11 @@ The extension requires the exact printed origin: scheme and host only, with no p
 
 ## Configure the extension
 
-1. Build and install the extension as described in the repository README.
-2. Open the popup and enter the deployed Worker origin. Hosts also enter the room creation key.
-3. Grant the optional browser permission for that origin. The extension verifies the backend service and protocol before saving it.
-4. Open a SoundCloud track, review the transmission notice, and create or join a room.
-5. Share the invitation link shown for the room. It contains the backend origin and puts the room code in a URL fragment that is not sent to the Worker landing page.
+1. Install the extension (see the [README](../README.md)).
+2. In the popup, select **Use own server**, enter the deployed Worker origin and the room creation key, and allow access to that origin when the browser asks. The extension checks the server's protocol before saving it.
+3. Open a SoundCloud track, select **Start a room**, and share the copied invitation link. The room code travels in the URL fragment, which is not sent to the Worker.
 
-Guests open the invitation link and then select the installed extension from the browser toolbar. After the guest accepts the transmission notice and backend permission, the extension verifies the backend, prepares the room code, and opens SoundCloud. Plain room-code entry remains available when participants have already configured the same backend.
+Guests open the invitation link, select the extension in the toolbar, approve access to the server, and select **Join room**. SoundCloud then opens and follows the host. To go back to the public server, select **Use the public server instead** on the same screen.
 
 The extension accepts HTTPS origins in normal use. It accepts HTTP only on `localhost` and `127.0.0.1` for development.
 
@@ -129,7 +125,7 @@ For extension development, run `npm install` and `npm run dev` from the reposito
 - Use only HTTPS for deployed origins; Cloudflare terminates TLS for workers.dev and configured custom domains.
 - Treat room codes as unlisted guest access credentials and host tokens as control credentials.
 - A room accepts at most 25 WebSocket connections, requires a join message within ten seconds, and accepts text messages up to 16 KiB.
-- Each deployment accepts at most 30 valid room-creation requests in any rolling 60-second period. The limiter stores up to 30 request timestamps, not client IP addresses.
+- Each deployment accepts at most `MAX_ROOM_CREATIONS_PER_MINUTE` room creations per rolling minute (30 by default, 120 on the public server). Servers with keyless creation also allow six per client per minute, tracked under an hourly-rotating hash of the client address. Limiters store only timestamps.
 - Only the host-token holder can publish playback state, and host sequence numbers must increase.
 - Application room storage is deleted after six hours of inactivity.
 - A new room is deleted if its host does not join within five minutes.

@@ -40,4 +40,4 @@ The open-source license does not transfer these obligations to project maintaine
 
 ## Distribution status
 
-Chromium use is currently by developer-mode unpacked installation. Firefox distribution is planned through unlisted AMO signing, subject to technical completion and Mozilla review requirements. Neither path implies approval by SoundCloud, legal compliance, security certification, or fitness for a particular deployment.
+Chromium use is by developer-mode unpacked installation, with an in-popup notice when a newer version is published. Firefox builds are signed by AMO as an unlisted add-on and self-distributed from the public room server with automatic updates. Neither path implies approval by SoundCloud, legal compliance, security certification, or fitness for a particular deployment.
