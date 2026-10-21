@@ -189,6 +189,13 @@ export default defineBackground(() => {
         session.public.trackUrl = incoming.state.trackUrl;
       }
       await save();
+      // Servers that support nicknames return a member ID. Older servers
+      // reject unknown messages, so only send the name when it is there.
+      if (incoming.memberId && session.public.nickname) {
+        socket?.send(
+          JSON.stringify({ type: 'rename', name: session.public.nickname }),
+        );
+      }
       if (incoming.role === 'guest' && session.lastPlayback) {
         await sendToTab(session.lastPlayback);
       }
@@ -259,7 +266,6 @@ export default defineBackground(() => {
           roomCode,
           participantId: session.participantId,
           ...(session.hostToken ? { hostToken: session.hostToken } : {}),
-          ...(session.public.nickname ? { name: session.public.nickname } : {}),
         }),
       );
       socket?.send(JSON.stringify({ type: 'ping', sentAt: Date.now() }));
@@ -484,7 +490,7 @@ export default defineBackground(() => {
           await browser.storage.local.remove(nicknameKey);
         }
         await setPublic({ nickname });
-        if (socket?.readyState === WebSocket.OPEN) {
+        if (socket?.readyState === WebSocket.OPEN && session.public.memberId) {
           socket.send(
             JSON.stringify({ type: 'rename', name: nickname ?? null }),
           );
