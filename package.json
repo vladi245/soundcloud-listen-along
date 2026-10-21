@@ -26,6 +26,7 @@
     "validate:release": "node scripts/validate-release.mjs",
     "server-template:export": "node scripts/export-server-template.mjs",
     "release:package": "npm run check && npm run build:all && npm run zip && npm run zip:firefox && npm run validate:release",
+    "release:hosted": "node scripts/release-hosted.mjs",
     "postinstall": "wxt prepare && npm --prefix server ci"
   },
   "devDependencies": {

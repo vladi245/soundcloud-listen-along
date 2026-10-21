@@ -1,8 +1,8 @@
 # SoundCloud Listen Along
 
-An unofficial browser extension for synchronized listening through your own room server.
+An unofficial browser extension for listening to SoundCloud together. Start a room in one click and share the link.
 
-`MVP IMPLEMENTED` | `SELF-HOSTED ONLY` | `NO CENTRAL SERVICE`
+`MVP IMPLEMENTED` | `PUBLIC ROOM SERVER` | `SELF-HOSTING OPTIONAL`
 
 [![Project status: MVP](https://img.shields.io/badge/status-MVP-C65D28)](https://github.com/vladi245/soundcloud-listen-along)
 [![Chromium: unpacked](https://img.shields.io/badge/Chromium-unpacked-3B6EA8)](#browser-installation)
@@ -14,7 +14,8 @@ An unofficial browser extension for synchronized listening through your own room
 
 ## Features
 
-- Creates private, unlisted rooms on an operator-deployed Cloudflare Worker.
+- Creates private, unlisted rooms on the public room server with no account or setup, or on a Cloudflare Worker you deploy yourself.
+- Invitation links open SoundCloud and join the room automatically.
 - Synchronizes the host's track URL, play/pause state, position, and seeks to guests.
 - Shows host or guest role, participant count, connection state, and a shareable invitation link.
 - Reconnects interrupted extension sessions and uses heartbeat timing to estimate server clock offset.
@@ -22,7 +23,7 @@ An unofficial browser extension for synchronized listening through your own room
 - Relays synchronization metadata only; audio remains on SoundCloud.
 - Includes protocol validation, message-size and room-capacity limits, host authority, and automatic room cleanup.
 
-Current limitations include one host per room, up to 25 WebSocket connections, no room password beyond possession of the room code, no room discovery, and no project-operated backend.
+Current limitations include one host per room, up to 25 WebSocket connections, no room password beyond possession of the room code, and no room discovery.
 
 ## Installation
 
@@ -53,9 +54,16 @@ Unlisted Chrome Web Store and AMO-signed Firefox distribution is being prepared.
 
 Run `npm run build:firefox`, open `about:debugging#/runtime/this-firefox`, select **Load Temporary Add-on**, and choose `.output/firefox-mv3/manifest.json`. This temporary development installation is removed when Firefox closes. There is no signed Firefox build currently available.
 
+## Usage
+
+1. Open a SoundCloud track, open the extension, and select **Start a room**. The invitation link is copied automatically.
+2. Guests open the link, select the extension, and choose **Join room**. SoundCloud opens and follows the host.
+
+Rooms run on the public room server by default. Each room is its own Cloudflare Durable Object, created on demand and deleted when the room ends.
+
 ## Self-hosting
 
-The room server is a Cloudflare Worker backed by one Durable Object per room. Deploy it under your own Cloudflare account by following [the deployment guide](docs/deployment.md). The project does not provide a central room service, discovery service, analytics endpoint, or fallback relay.
+The room server is a Cloudflare Worker backed by one Durable Object per room. To use your own instead of the public one, deploy it under your Cloudflare account by following [the deployment guide](docs/deployment.md) and choose **Use own server** in the popup.
 
 After deployment:
 

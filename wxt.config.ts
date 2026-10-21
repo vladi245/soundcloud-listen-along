@@ -1,12 +1,16 @@
 import { defineConfig } from 'wxt';
+import { HOSTED_BACKEND_URL } from './lib/hosted';
 
 export default defineConfig({
   manifest: {
     name: 'SoundCloud Listen Along (Unofficial)',
     description:
-      'Synchronize SoundCloud playback in self-hosted, private rooms.',
+      'Listen to SoundCloud together in private, synchronized rooms.',
     incognito: 'not_allowed',
     permissions: ['activeTab', 'storage'],
+    ...(HOSTED_BACKEND_URL
+      ? { host_permissions: [`${HOSTED_BACKEND_URL}/*`] }
+      : {}),
     optional_host_permissions: [
       'https://*/*',
       'http://localhost/*',
@@ -16,6 +20,10 @@ export default defineConfig({
       gecko: {
         id: 'soundcloud-listen-along@vladi245.github.io',
         strict_min_version: '140.0',
+        // Self-distributed signed builds update from the public server.
+        ...(HOSTED_BACKEND_URL
+          ? { update_url: `${HOSTED_BACKEND_URL}/updates.json` }
+          : {}),
         data_collection_permissions: {
           required: [
             'authenticationInfo',

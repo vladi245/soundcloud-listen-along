@@ -1,4 +1,32 @@
-# Self-hosted Deployment
+# Deployment
+
+## Public room server
+
+The extension uses a project-operated public room server by default. It runs the same Worker with `wrangler.hosted.toml`, which enables `PUBLIC_ROOM_CREATION` so rooms can be created without a key. Room creation is limited per client (six per minute, keyed by an hourly-rotating hash of the client address) and globally (`MAX_ROOM_CREATIONS_PER_MINUTE`).
+
+Maintainer deployment, from `server/`:
+
+```sh
+npx wrangler login
+npm run deploy:hosted
+```
+
+Copy the printed `https://...workers.dev` origin into `HOSTED_BACKEND_URL` in `lib/hosted.ts`; the extension manifest grants host access to that origin automatically. Optionally set `INSTALL_URL` in `wrangler.hosted.toml` to the store listing so invitation pages link to it, then redeploy. Set `HOSTED_BACKEND_URL` to `null` to build an extension with no default server.
+
+### Extension packages
+
+`npm run release:hosted` builds both browser packages, signs the Firefox build as an unlisted add-on, writes `updates.json` for Firefox auto-updates, and redeploys the server with these files under `server/hosted-assets/`. The invitation page then offers an **Install for Firefox** button and Chromium load-unpacked steps.
+
+Signing needs AMO API credentials in `.env.amo` (git-ignored):
+
+```sh
+AMO_JWT_ISSUER=user:12345678:123
+AMO_JWT_SECRET=...
+```
+
+Raise `version` in `package.json` before every release; AMO signs each version once.
+
+## Self-hosted deployment
 
 The server is a Cloudflare Worker backed by the `Room` Durable Object. It must be deployed by each operator under that operator's Cloudflare account. The project does not run a central service or fallback relay.
 

@@ -6,6 +6,7 @@ export const MESSAGE_NAMESPACE = 'soundcloud-listen-along';
 export interface ExtensionState {
   backendUrl?: string;
   hasCreationKey?: boolean;
+  openRoomCreation?: boolean;
   maxParticipants?: number;
   pendingRoomCode?: string;
   pendingConsent?: boolean;

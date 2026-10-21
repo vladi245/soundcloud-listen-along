@@ -32,19 +32,27 @@ export function activeTrackUrl(document: Document): string | null {
 
 export function activatePageTrack(document: Document): boolean {
   const button = document.querySelector<HTMLElement>(
-    '.soundActions .playButton, .listenEngagement .playButton',
+    [
+      '.soundTitle__playButtonHero .sc-button-play',
+      '.soundTitle__playButton .sc-button-play',
+      '.soundActions .playButton',
+      '.listenEngagement .playButton',
+    ].join(', '),
   );
   if (!button) return false;
   button.click();
   return true;
 }
 
-export function findPlayer(document: Document): HTMLAudioElement | null {
-  return document.querySelector('audio');
-}
+export type MediaState = Pick<
+  HTMLMediaElement,
+  'currentTime' | 'paused' | 'ended'
+>;
+export type MediaControl = MediaState &
+  Pick<HTMLMediaElement, 'duration' | 'play' | 'pause'>;
 
 export function readPlaybackState(
-  audio: HTMLAudioElement,
+  audio: MediaState,
   trackUrlValue: string,
   sequence: number,
   now = Date.now(),
@@ -62,7 +70,7 @@ export function readPlaybackState(
 }
 
 export async function applyPlaybackState(
-  audio: HTMLAudioElement,
+  audio: MediaControl,
   activeUrl: string,
   state: PlaybackState,
   now = Date.now(),
