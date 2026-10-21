@@ -2,6 +2,10 @@ import { defineConfig } from 'wxt';
 import { HOSTED_BACKEND_URL } from './lib/hosted';
 
 export default defineConfig({
+  zip: {
+    // Keep built packages and store images out of the AMO source archive.
+    excludeSources: ['server/hosted-assets/**', 'docs/store/**'],
+  },
   manifest: {
     name: 'SoundCloud Listen Along (Unofficial)',
     description:
