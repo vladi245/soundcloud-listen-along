@@ -1,5 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
+import worker from './index';
 
 describe('room service', () => {
   it('serves the invitation landing page', async () => {
@@ -71,5 +72,62 @@ describe('room service', () => {
     });
     expect(limited.status).toBe(429);
     expect(Number(limited.headers.get('Retry-After'))).toBeGreaterThan(0);
+  });
+
+  it('creates rooms without a key on a public server', async () => {
+    const publicEnv = { ...env, PUBLIC_ROOM_CREATION: 'true' } as Parameters<
+      typeof worker.fetch
+    >[1];
+    const meta = await worker.fetch(
+      new Request('https://rooms.example/meta'),
+      publicEnv,
+    );
+    await expect(meta.json()).resolves.toMatchObject({
+      creationKeyRequired: false,
+      roomCreationEnabled: true,
+    });
+
+    const created = await worker.fetch(
+      new Request('https://rooms.example/rooms', {
+        method: 'POST',
+        headers: { 'CF-Connecting-IP': '203.0.113.7' },
+      }),
+      publicEnv,
+    );
+    expect(created.status).toBe(201);
+  });
+
+  it('throttles each client on a public server', async () => {
+    const publicEnv = { ...env, PUBLIC_ROOM_CREATION: 'true' } as Parameters<
+      typeof worker.fetch
+    >[1];
+    const create = (address: string) =>
+      worker.fetch(
+        new Request('https://rooms.example/rooms', {
+          method: 'POST',
+          headers: { 'CF-Connecting-IP': address },
+        }),
+        publicEnv,
+      );
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      expect((await create('198.51.100.20')).status).toBe(201);
+    }
+    expect((await create('198.51.100.20')).status).toBe(429);
+    expect((await create('198.51.100.21')).status).toBe(201);
+  });
+
+  it('applies a requested limiter quota', async () => {
+    const limiterNamespace = (
+      env as typeof env & { CREATION_LIMITER: DurableObjectNamespace }
+    ).CREATION_LIMITER;
+    const limiter = limiterNamespace.get(limiterNamespace.newUniqueId());
+    const consume = () =>
+      limiter.fetch('https://limiter.internal/consume', {
+        method: 'POST',
+        headers: { 'X-Rate-Limit': '2' },
+      });
+    expect((await consume()).status).toBe(204);
+    expect((await consume()).status).toBe(204);
+    expect((await consume()).status).toBe(429);
   });
 });

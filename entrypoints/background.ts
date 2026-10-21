@@ -4,6 +4,7 @@ import {
   randomOpaqueId,
   roomSocketUrl,
 } from '@/lib/backend';
+import { HOSTED_BACKEND_URL } from '@/lib/hosted';
 import {
   isRuntimeMessage,
   message,
@@ -26,6 +27,7 @@ interface Session {
   participantId?: string;
   hostToken?: string;
   creationKey?: string;
+  pendingJoinTabId?: number;
   lastPlayback?: PlaybackState;
   sequence: number;
   serverOffset: number;
@@ -34,6 +36,7 @@ interface Session {
 interface BackendPreferences {
   backendUrl: string;
   maxParticipants: number;
+  openRoomCreation?: boolean;
   creationKey?: string;
 }
 
@@ -76,8 +79,13 @@ export default defineBackground(() => {
       }
       if (session.public.backendUrl === preferences.backendUrl) {
         session.public.maxParticipants = preferences.maxParticipants;
+        session.public.openRoomCreation ??= preferences.openRoomCreation;
         session.creationKey ??= preferences.creationKey;
       }
+    }
+    if (!session.public.backendUrl && HOSTED_BACKEND_URL) {
+      session.public.backendUrl = HOSTED_BACKEND_URL;
+      session.public.openRoomCreation = true;
     }
     session.public.hasCreationKey = Boolean(session.creationKey);
     loaded = true;
@@ -121,12 +129,14 @@ export default defineBackground(() => {
     stopSocket();
     const backendUrl = session.public.backendUrl;
     const maxParticipants = session.public.maxParticipants;
+    const openRoomCreation = session.public.openRoomCreation;
     const creationKey = session.creationKey;
     session = {
       public: {
         ...idleState,
         ...(backendUrl ? { backendUrl } : {}),
         ...(maxParticipants ? { maxParticipants } : {}),
+        ...(openRoomCreation ? { openRoomCreation } : {}),
         hasCreationKey: Boolean(creationKey),
         ...(error ? { status: 'error' as const, error } : {}),
       },
@@ -262,11 +272,12 @@ export default defineBackground(() => {
     tabId: number,
     roomCode: string,
     hostToken?: string,
+    knownTabUrl?: string,
   ) => {
     const backendUrl = session.public.backendUrl;
     if (!backendUrl) throw new Error('Configure a backend first');
-    const tab = await browser.tabs.get(tabId);
-    if (!tab.url || !/^https:\/\/([^.]+\.)?soundcloud\.com\//.test(tab.url)) {
+    const tabUrl = knownTabUrl ?? (await browser.tabs.get(tabId)).url;
+    if (!tabUrl || !/^https:\/\/([^.]+\.)?soundcloud\.com\//.test(tabUrl)) {
       throw new Error('Open SoundCloud in the active tab first');
     }
     if (!hostToken) {
@@ -315,6 +326,7 @@ export default defineBackground(() => {
         if (request.creationKey && !metadata.roomCreationEnabled) {
           throw new Error('Backend has not enabled room creation');
         }
+        const openRoomCreation = isOpenCreation(metadata);
         await clearRoom();
         session.creationKey = request.creationKey || undefined;
         await save();
@@ -322,6 +334,7 @@ export default defineBackground(() => {
           [preferenceKey]: {
             backendUrl,
             maxParticipants: metadata.maxParticipants,
+            openRoomCreation,
             ...(request.rememberCreationKey && request.creationKey
               ? { creationKey: request.creationKey }
               : {}),
@@ -331,6 +344,7 @@ export default defineBackground(() => {
           backendUrl,
           hasCreationKey: Boolean(session.creationKey),
           maxParticipants: metadata.maxParticipants,
+          openRoomCreation,
           error: undefined,
           status: 'idle',
         });
@@ -343,6 +357,7 @@ export default defineBackground(() => {
         const stored = await browser.storage.local.get(preferenceKey);
         const preferences = stored[preferenceKey] as
           BackendPreferences | undefined;
+        const openRoomCreation = isOpenCreation(metadata);
         await clearRoom();
         session.creationKey = creationKey;
         if (!preferences || preferences.backendUrl === backendUrl) {
@@ -350,6 +365,7 @@ export default defineBackground(() => {
             [preferenceKey]: {
               backendUrl,
               maxParticipants: metadata.maxParticipants,
+              openRoomCreation,
               ...(preferences?.creationKey
                 ? { creationKey: preferences.creationKey }
                 : {}),
@@ -360,11 +376,19 @@ export default defineBackground(() => {
           backendUrl,
           hasCreationKey: Boolean(creationKey),
           maxParticipants: metadata.maxParticipants,
+          openRoomCreation,
           pendingRoomCode: request.roomCode,
           pendingConsent: true,
           error: undefined,
           status: 'idle',
         });
+        // Opening SoundCloud closes the popup, so the background joins the
+        // room once the new tab's content script reports in.
+        const tab = await browser.tabs.create({
+          url: 'https://soundcloud.com/',
+        });
+        session.pendingJoinTabId = tab.id;
+        await save();
       } else if (request.type === 'create-room') {
         const backendUrl = session.public.backendUrl;
         if (!backendUrl) throw new Error('Configure a backend first');
@@ -398,7 +422,21 @@ export default defineBackground(() => {
         }
         await clearRoom();
       } else if (request.type === 'content-ready') {
-        if (sender.tab?.id === session.tabId) {
+        const pendingRoomCode = session.public.pendingRoomCode;
+        if (
+          sender.tab?.id !== undefined &&
+          sender.tab.id === session.pendingJoinTabId &&
+          pendingRoomCode &&
+          !session.public.roomCode
+        ) {
+          session.pendingJoinTabId = undefined;
+          await startRoom(
+            sender.tab.id,
+            pendingRoomCode,
+            undefined,
+            sender.tab.url ?? sender.url,
+          );
+        } else if (sender.tab?.id === session.tabId) {
           await connect();
           if (session.public.role === 'guest' && session.lastPlayback) {
             await sendToTab(session.lastPlayback);
@@ -443,6 +481,21 @@ export default defineBackground(() => {
   };
 
   browser.runtime.onMessage.addListener(handleMessage);
+  // Content scripts only reach pages loaded after installation, so reload any
+  // open invitation pages to show their Join button right away.
+  browser.runtime.onInstalled.addListener(async () => {
+    if (!HOSTED_BACKEND_URL) return;
+    const tabs = await browser.tabs
+      .query({ url: `${HOSTED_BACKEND_URL}/*` })
+      .catch(() => []);
+    await Promise.all(
+      tabs.map((tab) =>
+        tab.id === undefined
+          ? undefined
+          : browser.tabs.reload(tab.id).catch(() => undefined),
+      ),
+    );
+  });
   void load().then(connect);
 });
 
@@ -452,6 +505,13 @@ function backendError(value: unknown): string | null {
   if (!isRecord(error)) return null;
   const message = error.message;
   return typeof message === 'string' ? message : null;
+}
+
+function isOpenCreation(metadata: {
+  creationKeyRequired: boolean;
+  roomCreationEnabled: boolean;
+}): boolean {
+  return metadata.roomCreationEnabled && !metadata.creationKeyRequired;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

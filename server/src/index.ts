@@ -21,6 +21,8 @@ const HOST_JOIN_MS = 5 * 60 * 1000;
 const SOCKET_JOIN_MS = 10 * 1000;
 const CREATION_WINDOW_MS = 60 * 1000;
 const MAX_CREATIONS_PER_WINDOW = 30;
+const MAX_CLIENT_CREATIONS_PER_WINDOW = 6;
+const CLIENT_BUCKET_MS = 60 * 60 * 1000;
 const ROOM_KEY = 'room';
 const RATE_KEY = 'rate';
 
@@ -29,6 +31,10 @@ interface Env {
   CREATION_LIMITER: DurableObjectNamespace;
   ALLOWED_ORIGINS?: string;
   ROOM_CREATION_KEY?: string;
+  PUBLIC_ROOM_CREATION?: string;
+  MAX_ROOM_CREATIONS_PER_MINUTE?: string;
+  INSTALL_URL?: string;
+  ASSETS?: Fetcher;
 }
 
 interface RoomRecord {
@@ -66,26 +72,31 @@ const landingPage = `<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SoundCloud Listen Along Invitation</title>
+  <meta name="color-scheme" content="light dark">
+  <title>Listen Along invitation</title>
   <link rel="stylesheet" href="/landing.css">
 </head>
 <body>
   <main>
-    <div class="signal" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-    <p class="label">SC // ROOM INVITATION</p>
-    <h1>Listen Along</h1>
-    <p>This link points to a private room on this self-hosted server.</p>
-    <ol>
-      <li>Install the SoundCloud Listen Along extension from the link provided by your host.</li>
-      <li>Keep this page open and select the extension from your browser toolbar.</li>
-      <li>Approve this server, open SoundCloud, and join the prepared room.</li>
-    </ol>
-    <p class="notice">The room code stays in the URL fragment and is not sent to this page. Audio remains on SoundCloud.</p>
+    <p class="brand"><span class="mark" aria-hidden="true"></span>Listen Along</p>
+    <h1>You're invited to listen together</h1>
+    <div id="join" hidden>
+      <button id="join-button" type="button">Join room</button>
+      <p id="join-status" class="status" role="status"></p>
+      <p class="fine">Joining shares the current track link and playback position with the room server while you are connected.</p>
+    </div>
+    <div id="steps">
+      <h2>1. Install the extension</h2>
+      {{INSTALL}}
+      <h2>2. Come back to this page</h2>
+      <p>A <b>Join room</b> button appears here once the extension is installed. SoundCloud then opens and follows the host.</p>
+    </div>
+    <p class="fine">Audio plays from SoundCloud. The room code stays in this link and is not sent to the server by this page. Unofficial extension, not affiliated with SoundCloud.</p>
   </main>
 </body>
 </html>`;
 
-const landingCss = `:root{color:#f2f2f2;background:#090909;font-family:Arial,Helvetica,sans-serif}body{margin:0;min-height:100vh;display:grid;place-items:center}main{box-sizing:border-box;width:min(560px,calc(100% - 32px));padding:32px;border:1px solid #303030;border-top:3px solid #ff5500;background:#111}.signal{display:flex;align-items:center;gap:3px;height:34px}.signal i{display:block;width:3px;background:#ff5500}.signal i:nth-child(1){height:8px}.signal i:nth-child(2){height:24px}.signal i:nth-child(3){height:15px}.signal i:nth-child(4){height:30px}.label,.notice{color:#929292;font:12px SFMono-Regular,Consolas,monospace;letter-spacing:.06em}.label{color:#ff5500}h1{margin:8px 0 16px;font-size:32px;text-transform:uppercase}p,li{line-height:1.55}ol{padding-left:22px}.notice{margin-top:28px;border-top:1px solid #303030;padding-top:16px;line-height:1.5}`;
+const landingCss = `:root{--orange:#f50;--bg:#fff;--text:#333;--muted:#999;--line:#e5e5e5;color:var(--text);background:var(--bg);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}@media (prefers-color-scheme:dark){:root{--bg:#121212;--text:#f2f2f2;--muted:#8c8c8c;--line:#2b2b2b}}body{margin:0;min-height:100vh;display:grid;place-items:center}main{box-sizing:border-box;width:min(480px,calc(100% - 32px));padding:32px 0}.brand{display:flex;align-items:center;gap:8px;margin:0 0 24px;font-weight:600}.mark{width:16px;height:16px;border-radius:3px;background:var(--orange)}h1{margin:0 0 20px;font-size:24px;font-weight:600;line-height:1.3}h2{margin:20px 0 8px;font-size:15px;font-weight:600}p{margin:0}.button{display:inline-block;height:40px;padding:0 24px;border-radius:3px;color:#fff;background:var(--orange);font-weight:600;line-height:40px;text-decoration:none}.button:hover{background:#e64d00}details{margin-top:12px;color:var(--muted);font-size:14px}summary{cursor:pointer}details ol{margin-top:8px;color:var(--text)}code{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}ol{margin:0;padding-left:20px}li{margin:6px 0}a{color:var(--orange)}.fine{margin:24px 0 0;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}`;
 
 export function createRoomCode(random: Uint8Array): string {
   if (random.length !== ROOM_CODE_LENGTH) {
@@ -165,7 +176,10 @@ export default {
 
     if (url.pathname === '/') {
       if (request.method !== 'GET') return methodNotAllowed('GET', origin);
-      return documentResponse(landingPage, 'text/html; charset=utf-8');
+      return documentResponse(
+        await renderLandingPage(env),
+        'text/html; charset=utf-8',
+      );
     }
 
     if (url.pathname === '/landing.css') {
@@ -180,8 +194,9 @@ export default {
           service: BACKEND_SERVICE,
           protocolVersion: PROTOCOL_VERSION,
           maxParticipants: MAX_SOCKETS,
-          creationKeyRequired: true,
-          roomCreationEnabled: Boolean(env.ROOM_CREATION_KEY),
+          creationKeyRequired: !publicCreation(env),
+          roomCreationEnabled:
+            publicCreation(env) || Boolean(env.ROOM_CREATION_KEY),
         },
         200,
         origin,
@@ -192,7 +207,8 @@ export default {
       if (request.method !== 'POST') {
         return methodNotAllowed('POST', origin);
       }
-      if (!env.ROOM_CREATION_KEY) {
+      const open = publicCreation(env);
+      if (!open && !env.ROOM_CREATION_KEY) {
         return jsonError(
           503,
           'server_not_configured',
@@ -200,11 +216,16 @@ export default {
           origin,
         );
       }
-      const suppliedKey = request.headers
-        .get('Authorization')
-        ?.replace(/^Bearer /, '');
-      if (!suppliedKey || !safeEqual(suppliedKey, env.ROOM_CREATION_KEY)) {
-        return jsonError(401, 'unauthorized', 'Room creation denied', origin);
+      if (!open) {
+        const suppliedKey = request.headers
+          .get('Authorization')
+          ?.replace(/^Bearer /, '');
+        if (
+          !suppliedKey ||
+          !safeEqual(suppliedKey, env.ROOM_CREATION_KEY ?? '')
+        ) {
+          return jsonError(401, 'unauthorized', 'Room creation denied', origin);
+        }
       }
       if (
         request.body !== null &&
@@ -217,28 +238,43 @@ export default {
           origin,
         );
       }
-      const limiter = env.CREATION_LIMITER.get(
-        env.CREATION_LIMITER.idFromName('global'),
-      );
-      const rate = await limiter.fetch('https://limiter.internal/consume', {
-        method: 'POST',
-      });
-      if (rate.status === 429) {
-        return jsonError(
-          429,
-          'creation_rate_limited',
-          'Too many rooms created; try again shortly',
-          origin,
-          { 'Retry-After': rate.headers.get('Retry-After') ?? '60' },
+      // Check the client quota first so one client cannot drain the global one.
+      const limiters = [
+        ...(open
+          ? [
+              {
+                name: await clientLimiterName(request),
+                limit: MAX_CLIENT_CREATIONS_PER_WINDOW,
+              },
+            ]
+          : []),
+        { name: 'global', limit: globalCreationLimit(env) },
+      ];
+      for (const { name, limit } of limiters) {
+        const limiter = env.CREATION_LIMITER.get(
+          env.CREATION_LIMITER.idFromName(name),
         );
-      }
-      if (!rate.ok) {
-        return jsonError(
-          503,
-          'creation_unavailable',
-          'Room creation is temporarily unavailable',
-          origin,
-        );
+        const rate = await limiter.fetch('https://limiter.internal/consume', {
+          method: 'POST',
+          headers: { 'X-Rate-Limit': String(limit) },
+        });
+        if (rate.status === 429) {
+          return jsonError(
+            429,
+            'creation_rate_limited',
+            'Too many rooms created; try again shortly',
+            origin,
+            { 'Retry-After': rate.headers.get('Retry-After') ?? '60' },
+          );
+        }
+        if (!rate.ok) {
+          return jsonError(
+            503,
+            'creation_unavailable',
+            'Room creation is temporarily unavailable',
+            origin,
+          );
+        }
       }
 
       for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -723,12 +759,17 @@ export class CreationLimiter implements DurableObject {
       return new Response(null, { status: 404 });
     }
     const now = Date.now();
+    const requestedLimit = Number(request.headers.get('X-Rate-Limit'));
+    const limit =
+      Number.isInteger(requestedLimit) && requestedLimit > 0
+        ? requestedLimit
+        : MAX_CREATIONS_PER_WINDOW;
     const result = await this.state.storage.transaction(async (transaction) => {
       const stored = await transaction.get<RateRecord>(RATE_KEY);
       const timestamps = (stored?.timestamps ?? []).filter(
         (timestamp) => now - timestamp < CREATION_WINDOW_MS,
       );
-      if (timestamps.length >= MAX_CREATIONS_PER_WINDOW) {
+      if (timestamps.length >= limit) {
         return {
           allowed: false,
           retryAfter: Math.max(
@@ -769,6 +810,88 @@ export class CreationLimiter implements DurableObject {
     await this.state.storage.put<RateRecord>(RATE_KEY, { timestamps });
     await this.state.storage.setAlarm(timestamps[0] + CREATION_WINDOW_MS);
   }
+}
+
+function publicCreation(env: Env): boolean {
+  return env.PUBLIC_ROOM_CREATION === 'true';
+}
+
+function globalCreationLimit(env: Env): number {
+  const configured = Number(env.MAX_ROOM_CREATIONS_PER_MINUTE);
+  return Number.isInteger(configured) && configured > 0
+    ? configured
+    : MAX_CREATIONS_PER_WINDOW;
+}
+
+// Public servers throttle each client by an hourly-rotating hash of its
+// address. The address itself is never stored, and limiter state expires
+// with the creation window.
+async function clientLimiterName(request: Request): Promise<string> {
+  const address = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const bucket = Math.floor(Date.now() / CLIENT_BUCKET_MS);
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(`${bucket}:${address}`),
+  );
+  return `client:${Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('')}`;
+}
+
+const FIREFOX_PACKAGE = '/listen-along.xpi';
+const CHROMIUM_PACKAGE = '/listen-along-chrome.zip';
+
+async function renderLandingPage(env: Env): Promise<string> {
+  return landingPage.replace('{{INSTALL}}', await installInstructions(env));
+}
+
+async function installInstructions(env: Env): Promise<string> {
+  const hosted = async (path: string) =>
+    env.ASSETS
+      ? (await env.ASSETS.fetch(new URL(path, 'https://assets.internal'))).ok
+      : false;
+  const [firefox, chromium] = await Promise.all([
+    hosted(FIREFOX_PACKAGE),
+    hosted(CHROMIUM_PACKAGE),
+  ]);
+  if (!firefox && !chromium) {
+    const url = httpsUrl(env.INSTALL_URL);
+    return url
+      ? `<p><a class="button" href="${escapeHtml(url)}" rel="noreferrer">Get the extension</a></p>`
+      : '<p>Use the install link from the person who invited you.</p>';
+  }
+  return [
+    firefox
+      ? `<p><a class="button" href="${FIREFOX_PACKAGE}">Install for Firefox</a></p>`
+      : '',
+    chromium
+      ? `<details${firefox ? '' : ' open'}>
+        <summary>Using Chrome, Edge or Brave?</summary>
+        <ol>
+          <li><a href="${CHROMIUM_PACKAGE}">Download the extension</a> and unzip it.</li>
+          <li>Open <code>chrome://extensions</code> and turn on <b>Developer mode</b>.</li>
+          <li>Click <b>Load unpacked</b> and choose the unzipped folder.</li>
+        </ol>
+      </details>`
+      : '',
+  ].join('\n');
+}
+
+function httpsUrl(value?: string): string | null {
+  try {
+    const url = value ? new URL(value) : null;
+    return url?.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }
 
 function socketAttachment(ws: WebSocket): SocketAttachment {

@@ -128,7 +128,50 @@ describe('service metadata', () => {
   });
 });
 
+describe('public room creation', () => {
+  it('does not require a creation key', async () => {
+    const response = await worker.fetch(
+      new Request('https://rooms.example/meta'),
+      {
+        ROOMS: {} as DurableObjectNamespace,
+        CREATION_LIMITER: {} as DurableObjectNamespace,
+        PUBLIC_ROOM_CREATION: 'true',
+      },
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      creationKeyRequired: false,
+      roomCreationEnabled: true,
+    });
+  });
+});
+
 describe('invitation landing page', () => {
+  it('links to a configured HTTPS install page', async () => {
+    const response = await worker.fetch(new Request('https://rooms.example/'), {
+      ROOMS: {} as DurableObjectNamespace,
+      CREATION_LIMITER: {} as DurableObjectNamespace,
+      INSTALL_URL: 'https://example.com/install?a="b"',
+    });
+    const html = await response.text();
+    expect(html).toContain('href="https://example.com/install?a=%22b%22"');
+  });
+
+  it('offers hosted extension packages', async () => {
+    const response = await worker.fetch(new Request('https://rooms.example/'), {
+      ROOMS: {} as DurableObjectNamespace,
+      CREATION_LIMITER: {} as DurableObjectNamespace,
+      ASSETS: {
+        fetch: async (input: RequestInfo | URL) =>
+          new Response(null, {
+            status: String(input).endsWith('.xpi') ? 200 : 404,
+          }),
+      } as unknown as Fetcher,
+    });
+    const html = await response.text();
+    expect(html).toContain('href="/listen-along.xpi"');
+    expect(html).not.toContain('listen-along-chrome.zip');
+  });
+
   it('serves a static page without receiving fragment credentials', async () => {
     const response = await worker.fetch(new Request('https://rooms.example/'), {
       ROOMS: {} as DurableObjectNamespace,
@@ -138,6 +181,6 @@ describe('invitation landing page', () => {
     expect(response.headers.get('Content-Type')).toBe(
       'text/html; charset=utf-8',
     );
-    expect(await response.text()).toContain('SC // ROOM INVITATION');
+    expect(await response.text()).toContain('Listen Along');
   });
 });

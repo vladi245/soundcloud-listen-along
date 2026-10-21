@@ -2,9 +2,9 @@
 
 ## Scope and current behavior
 
-This document describes the open-source extension and its self-hosted room design. It is not a privacy policy for SoundCloud or for any independently operated backend.
+This document describes the open-source extension, the public room server operated by the extension maintainer, and the self-hosted room design. It is not a privacy policy for SoundCloud or for any independently operated backend.
 
-The content script runs only on `https://soundcloud.com/*` and `https://*.soundcloud.com/*`. After a user explicitly creates or joins a room, the extension sends room and playback messages to that user's configured backend. The implemented backend is a Cloudflare Worker deployed under a self-hosting operator's account. The project contains no analytics or advertising integration and sends nothing to a service operated by the extension maintainers.
+The content script runs only on `https://soundcloud.com/*` and `https://*.soundcloud.com/*`. After a user explicitly creates or joins a room, the extension sends room and playback messages to that user's configured backend. By default this is the public room server, a Cloudflare Worker operated by the extension maintainer. Users may instead select a backend deployed under their own or another operator's Cloudflare account. The project contains no analytics or advertising integration, and the extension contacts the public room server only when the user creates or joins a room there or opens one of its invitations.
 
 The extension is disabled in private browsing so room and playback state cannot cross private and regular browser contexts.
 
@@ -12,7 +12,7 @@ Visiting SoundCloud remains subject to SoundCloud's own data practices. The brow
 
 ## Roles
 
-**Extension maintainers** publish source code and extension builds. They do not operate a public central room service. They receive information submitted through GitHub, such as issues, pull requests, and security reports, under GitHub's applicable terms.
+**Extension maintainers** publish source code and extension builds and operate the default public room server. For that server they are the backend operator described below, with Workers observability logging disabled in its deployment configuration. They receive information submitted through GitHub, such as issues, pull requests, and security reports, under GitHub's applicable terms.
 
 **Backend operators** are the people or organizations who deploy the room backend. Each operator independently chooses hosting providers, access controls, logging, retention, jurisdiction, and participant disclosures. Operators are responsible for their deployment; installing this extension does not make its maintainers the operator of that backend.
 
@@ -48,13 +48,13 @@ The extension/backend protocol processes:
 
 Room invitation links place the room code in the URL fragment. Browsers do not send that fragment in the HTTP request for the operator's landing page. The extension reads the active invitation tab only after the user opens its popup and uses the fragment to prepare the selected backend and room.
 
-The room Durable Object stores the room code, host token, creation, activity and host-presence timestamps, and latest playback snapshot. It deletes application room storage when the host does not join within five minutes, after six hours of inactivity, or, once the host has joined, when its last observed connection is more than one minute old. A separate creation limiter stores up to 30 request timestamps covering the preceding minute; it does not store client IP addresses. Cloudflare and network providers may still observe IP addresses, connection times, user-agent or protocol metadata, and operational logs. Their retention is controlled by the backend operator and hosting stack rather than this application cleanup.
+The room Durable Object stores the room code, host token, creation, activity and host-presence timestamps, and latest playback snapshot. It deletes application room storage when the host does not join within five minutes, after six hours of inactivity, or, once the host has joined, when its last observed connection is more than one minute old. A separate creation limiter stores request timestamps covering the preceding minute. A server that allows room creation without a key, such as the public room server, also limits each client: it derives a limiter name from a SHA-256 hash of the client IP address combined with the current hour, stores only timestamps under that name, and deletes them after the one-minute window. The IP address itself is not stored. Cloudflare and network providers may still observe IP addresses, connection times, user-agent or protocol metadata, and operational logs. Their retention is controlled by the backend operator and hosting stack rather than this application cleanup.
 
 ## Exclusions and minimization
 
 The design does not require the extension to send SoundCloud passwords, authentication cookies, private messages, contact lists, or audio content to a room backend. Implementations should not collect them. Playback messages should contain only what is necessary to identify and synchronize the selected public or user-accessible track.
 
-The extension has no telemetry, requests backend access as an optional per-origin permission, requires TLS except for local development, and exposes a room-leave control. Operators remain responsible for platform logging and retention disclosures.
+The extension has no telemetry, holds host access only for the public room server, requests access to any other backend as an optional per-origin permission, requires TLS except for local development, and exposes a room-leave control. Operators remain responsible for platform logging and retention disclosures.
 
 ## Operator checklist
 

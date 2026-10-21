@@ -7,6 +7,7 @@ import {
   randomOpaqueId,
   type RoomInvite,
 } from '@/lib/backend';
+import { HOSTED_BACKEND_URL, isHostedBackend } from '@/lib/hosted';
 import {
   message,
   type ExtensionState,
@@ -18,6 +19,9 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 let currentState: ExtensionState = { status: 'idle', participantCount: 0 };
 let setupCreationKey = '';
 let activeInvite: RoomInvite | null = null;
+let onSoundCloud = false;
+let sessionNotice = '';
+let sessionNoticeUntil = 0;
 
 type SetupMode = 'host' | 'guest';
 
@@ -35,46 +39,47 @@ async function activeTabId(): Promise<number> {
   return tab.id;
 }
 
-async function invitationFromActiveTab(): Promise<RoomInvite | null> {
+async function inspectActiveTab(): Promise<{
+  invite: RoomInvite | null;
+  soundCloud: boolean;
+}> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  return tab?.url ? parseRoomInvite(tab.url) : null;
+  return {
+    invite: tab?.url ? parseRoomInvite(tab.url) : null,
+    soundCloud: Boolean(
+      tab?.url && /^https:\/\/([^.]+\.)?soundcloud\.com\//.test(tab.url),
+    ),
+  };
+}
+
+function transmissionNotice(action: string): string {
+  return `<p class="fine">${action} shares the current track link and playback position with the room server while you are connected.</p>`;
 }
 
 function shell(content: string): string {
+  const server = !currentState.backendUrl
+    ? ''
+    : isHostedBackend(currentState.backendUrl)
+      ? 'Public server'
+      : 'Own server';
   return `
-    <main>
-      <header>
-        <div class="signal" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-        <div>
-          <span class="eyebrow">SC // Room link</span>
-          <h1>Listen Along</h1>
-        </div>
-        <span class="build-tag">SELF-HOSTED</span>
-      </header>
-      ${content}
-      <p class="legal">Audio stays on SoundCloud. This extension is independent and unofficial.</p>
-    </main>
+    <header class="top">
+      <img class="logo" src="/icon/32.png" alt="" width="20" height="20">
+      <span class="brand">Listen Along</span>
+      <span class="server">${server}</span>
+    </header>
+    <main class="body">${content}</main>
+    <footer class="foot">Unofficial extension. Audio plays from SoundCloud.</footer>
   `;
 }
 
 function renderStart(error?: string): void {
   app.innerHTML = shell(`
-    <section>
-      <span class="step">01 / Start</span>
-      <h2>Choose your role</h2>
-      <p class="muted">Host with your own room server, or join someone else's invitation.</p>
-      <div class="mode-grid">
-        <button id="host-setup" class="mode-button primary" type="button">
-          <b>Host a room</b>
-          <span>Deploy or connect a server</span>
-        </button>
-        <button id="guest-setup" class="mode-button" type="button">
-          <b>Join a room</b>
-          <span>Use a host's backend</span>
-        </button>
-      </div>
-      <p id="notice" class="notice" role="status"></p>
-    </section>
+    <h1 class="title">Listen together</h1>
+    <p class="lead">Host with your own room server, or join with a server address from the host.</p>
+    <button id="host-setup" class="btn btn-primary" type="button">Host a room</button>
+    <button id="guest-setup" class="btn btn-secondary" type="button">Join a room</button>
+    <p id="notice" class="notice" role="status"></p>
   `);
   if (error) document.querySelector('#notice')!.textContent = error;
   document.querySelector('#host-setup')!.addEventListener('click', () => {
@@ -90,39 +95,57 @@ function renderBackendForm(mode: SetupMode, error?: string): void {
   const hosting = mode === 'host';
   const newDeployment = hosting && Boolean(setupCreationKey);
   app.innerHTML = shell(`
-    <section>
-      <button id="setup-back" class="text-button back-button" type="button">&lt; Back</button>
-      <span class="step">01 / ${hosting ? 'Host setup' : 'Join setup'}</span>
-      <h2>${hosting ? 'Connect your room server' : "Connect to the host's server"}</h2>
-      <p class="muted">${hosting ? (newDeployment ? 'Deploy a private Cloudflare room server, then enter its address below.' : 'Enter the deployed server address and its creation key.') : 'Paste the backend address provided by the host.'}</p>
+    <button id="setup-back" class="link back" type="button">Back</button>
+    <h1 class="title">${hosting ? 'Your room server' : "Host's room server"}</h1>
+    <p class="lead">${hosting ? (newDeployment ? 'Deploy a room server to your Cloudflare account, then enter its address.' : 'Enter your server address and room creation key.') : 'Paste the server address the host gave you.'}</p>
+    ${
+      newDeployment
+        ? `<div class="panel">
+            <span class="label">Room creation key</span>
+            <div class="row">
+              <code id="generated-key" class="key"></code>
+              <button id="copy-key" class="btn btn-small" type="button">Copy</button>
+            </div>
+            <p class="fine">Paste this key as <code>ROOM_CREATION_KEY</code> while deploying.</p>
+            <a class="btn btn-secondary" href="https://deploy.workers.cloudflare.com/?url=https://github.com/vladi245/soundcloud-listen-along-server" target="_blank" rel="noreferrer">Deploy to Cloudflare</a>
+          </div>`
+        : ''
+    }
+    <form id="backend-form" class="form">
+      <label for="backend">Server address</label>
+      <input id="backend" name="backend" type="url" placeholder="https://rooms.example.workers.dev" autocomplete="url" required>
       ${
-        newDeployment
-          ? `<div class="deploy-panel">
-              <span class="panel-label">Deployment secret</span>
-              <code id="generated-key"></code>
-              <button id="copy-key" type="button">Copy key</button>
-              <a class="button-link" href="https://deploy.workers.cloudflare.com/?url=https://github.com/vladi245/soundcloud-listen-along-server" target="_blank" rel="noreferrer">Deploy to Cloudflare</a>
-              <p>Paste this key into <code>ROOM_CREATION_KEY</code> when deploying the Worker. Cloudflare will show its address when deployment finishes.</p>
-            </div>`
+        hosting
+          ? `<label for="creation-key">Room creation key</label>
+             <input id="creation-key" name="creation-key" type="password" maxlength="128" autocomplete="off" required>
+             <label class="check"><input id="remember-key" type="checkbox"><span>Remember key on this device</span></label>`
           : ''
       }
-      <form id="backend-form">
-        <label for="backend">Backend origin</label>
-        <input id="backend" name="backend" type="url" placeholder="https://rooms.example.workers.dev" autocomplete="url" required>
-        ${
-          hosting
-            ? `<label for="creation-key">Room creation key</label>
-               <input id="creation-key" name="creation-key" type="password" maxlength="128" autocomplete="off" required>
-               <label class="remember"><input id="remember-key" type="checkbox"><span>Remember this key on this device</span></label>`
-            : ''
-        }
-        <button class="primary" type="submit">Verify and save</button>
-      </form>
-      <p id="notice" class="notice" role="status"></p>
-    </section>
+      <button class="btn btn-primary" type="submit">Connect</button>
+    </form>
+    ${HOSTED_BACKEND_URL && !isHostedBackend(currentState.backendUrl) ? '<button id="use-hosted" class="link" type="button">Use the public server instead</button>' : ''}
+    <p id="notice" class="notice" role="status"></p>
   `);
   document.querySelector('#setup-back')!.addEventListener('click', () => {
-    renderStart();
+    if (currentState.backendUrl) renderLobby();
+    else renderStart();
+  });
+  document.querySelector('#use-hosted')?.addEventListener('click', async () => {
+    const previousBackend = currentState.backendUrl;
+    const response = await send({
+      type: 'configure-backend',
+      backendUrl: HOSTED_BACKEND_URL!,
+      creationKey: '',
+      rememberCreationKey: false,
+    });
+    currentState = response.state;
+    if (response.ok && previousBackend && !isHostedBackend(previousBackend)) {
+      await browser.permissions
+        .remove({ origins: [backendPermission(previousBackend)] })
+        .catch(() => false);
+    }
+    if (response.ok) render();
+    else notice.textContent = response.state.error ?? 'Server unavailable.';
   });
   if (newDeployment) {
     const keyInput = document.querySelector<HTMLInputElement>('#creation-key')!;
@@ -184,6 +207,7 @@ function renderBackendForm(mode: SetupMode, error?: string): void {
       if (response.ok) {
         if (
           previousBackend &&
+          !isHostedBackend(previousBackend) &&
           backendPermission(previousBackend) !== backendPermission(backendUrl)
         ) {
           await browser.permissions.remove({
@@ -203,33 +227,35 @@ function renderBackendForm(mode: SetupMode, error?: string): void {
 }
 
 function renderLobby(): void {
-  const canHost = currentState.hasCreationKey;
+  const canHost = currentState.hasCreationKey || currentState.openRoomCreation;
+  const hosted = isHostedBackend(currentState.backendUrl);
+  const invited = Boolean(currentState.pendingRoomCode);
   app.innerHTML = shell(`
-    <section>
-      <div class="server-row">
-        <span><b class="dot"></b><span id="backend"></span></span>
-        <button id="change-backend" class="text-button" type="button">Change</button>
+    <h1 class="title">${invited ? 'Invitation ready' : canHost ? 'Listen together' : 'Join a room'}</h1>
+    ${
+      onSoundCloud
+        ? `<p class="lead">${canHost ? 'Start a room from this tab and share the link. Everyone hears what you play.' : 'Join from this tab to follow the host.'}</p>`
+        : `<p class="lead">Rooms follow the SoundCloud tab you start them from.</p>
+           <button id="open-soundcloud" class="btn btn-secondary" type="button">Open SoundCloud</button>`
+    }
+    ${canHost && !invited ? `<button id="create" class="btn btn-primary" type="button" ${onSoundCloud ? '' : 'disabled'}>Start a room</button>` : ''}
+    <form id="join-form" class="form">
+      <label for="room-code">${invited ? 'Room code' : 'Have a room code?'}</label>
+      <div class="row">
+        <input id="room-code" maxlength="19" placeholder="ABCD-EFGH-JKMN-PQRS" spellcheck="false" autocomplete="off" required>
+        <button class="btn ${invited ? 'btn-primary' : 'btn-secondary'}" type="submit" ${onSoundCloud ? '' : 'disabled'}>Join</button>
       </div>
-      <span class="step">02 / Room</span>
-      <h2>${currentState.pendingRoomCode ? 'Invitation ready' : canHost ? 'Start together' : 'Join a room'}</h2>
-      <p class="muted">Open the track you want on SoundCloud, then ${canHost ? 'host or join a room' : 'join the room'}.</p>
-      <label class="consent">
-        <input id="consent" type="checkbox" ${currentState.pendingConsent ? 'checked' : ''}>
-        <span>Send the current track URL and playback timing to this backend while connected.</span>
-      </label>
-      ${canHost ? '<button id="create" class="primary" type="button">Create room</button><div class="divider"><span>or join</span></div>' : ''}
-      <form id="join-form" class="join-form">
-        <label for="room-code">Room code</label>
-        <div class="input-row">
-          <input id="room-code" maxlength="19" placeholder="ABCD-EFGH-JKMN-PQRS" spellcheck="false" required>
-          <button type="submit">Join</button>
-        </div>
-      </form>
-      <p id="notice" class="notice" role="status"></p>
-    </section>
+    </form>
+    ${transmissionNotice(canHost ? 'Starting or joining a room' : 'Joining a room')}
+    <p id="notice" class="notice" role="status"></p>
+    <div class="meta">
+      <span id="backend"></span>
+      <button id="change-backend" class="link" type="button">${hosted ? 'Use own server' : 'Change'}</button>
+    </div>
   `);
-  document.querySelector('#backend')!.textContent =
-    currentState.backendUrl ?? '';
+  document.querySelector('#backend')!.textContent = hosted
+    ? 'Public room server'
+    : (currentState.backendUrl ?? '');
   const roomInput = document.querySelector<HTMLInputElement>('#room-code')!;
   roomInput.value = currentState.pendingRoomCode
     ? formatRoomCode(currentState.pendingRoomCode)
@@ -241,11 +267,6 @@ function renderLobby(): void {
     type: 'create-room' | 'join-room',
     roomCode?: string,
   ) => {
-    const consent = document.querySelector<HTMLInputElement>('#consent')!;
-    if (!consent.checked) {
-      notice.textContent = 'Review and accept the transmission notice first.';
-      return;
-    }
     try {
       const tabId = await activeTabId();
       const response = await send(
@@ -254,6 +275,12 @@ function renderLobby(): void {
           : { type, tabId, roomCode: roomCode ?? '' },
       );
       currentState = response.state;
+      if (response.ok && type === 'create-room') {
+        sessionNotice = (await copyInvite())
+          ? 'Invitation link copied. Send it to your friends.'
+          : 'Click the room code to copy the invitation link.';
+        sessionNoticeUntil = Date.now() + 6_000;
+      }
       render();
     } catch (error) {
       notice.textContent =
@@ -261,11 +288,17 @@ function renderLobby(): void {
     }
   };
 
+  document
+    .querySelector('#open-soundcloud')
+    ?.addEventListener('click', async () => {
+      await browser.tabs.create({ url: 'https://soundcloud.com/' });
+      window.close();
+    });
   document.querySelector('#create')?.addEventListener('click', () => {
     void begin('create-room');
   });
   document.querySelector('#change-backend')!.addEventListener('click', () => {
-    if (currentState.hasCreationKey) {
+    if (currentState.hasCreationKey || hosted) {
       setupCreationKey = '';
       renderBackendForm('host');
     } else {
@@ -281,24 +314,22 @@ function renderLobby(): void {
 }
 
 function renderInvite(invite: RoomInvite): void {
+  const hosted = isHostedBackend(invite.backendUrl);
   app.innerHTML = shell(`
-    <section>
-      <span class="step">01 / Invitation</span>
-      <h2>Join this room</h2>
-      <p class="muted">This invitation will configure the host's room server. The browser will ask you to approve access to that server only.</p>
-      <dl class="invite-details">
-        <div><dt>Backend</dt><dd id="invite-backend"></dd></div>
-        <div><dt>Room</dt><dd id="invite-room"></dd></div>
-      </dl>
-      <label class="consent">
-        <input id="invite-consent" type="checkbox">
-        <span>Send the current track URL and playback timing to this backend while connected.</span>
-      </label>
-      <button id="accept-invite" class="primary" type="button">Allow and continue</button>
-      <p id="notice" class="notice" role="status"></p>
-    </section>
+    <h1 class="title">You're invited</h1>
+    <p class="lead">${hosted ? 'SoundCloud opens in a new tab and plays along with the host.' : "This room is on the host's own server. Your browser will ask to allow access to it."}</p>
+    <div class="code-box">
+      <span class="label">Room</span>
+      <span id="invite-room" class="code"></span>
+      <span id="invite-backend" class="sub"></span>
+    </div>
+    <button id="accept-invite" class="btn btn-primary" type="button">Join room</button>
+    ${transmissionNotice('Joining')}
+    <p id="notice" class="notice" role="status"></p>
   `);
-  document.querySelector('#invite-backend')!.textContent = invite.backendUrl;
+  document.querySelector('#invite-backend')!.textContent = hosted
+    ? 'Public room server'
+    : invite.backendUrl;
   document.querySelector('#invite-room')!.textContent = formatRoomCode(
     invite.roomCode,
   );
@@ -306,12 +337,6 @@ function renderInvite(invite: RoomInvite): void {
   document
     .querySelector('#accept-invite')!
     .addEventListener('click', async () => {
-      if (
-        !document.querySelector<HTMLInputElement>('#invite-consent')!.checked
-      ) {
-        notice.textContent = 'Review and accept the transmission notice first.';
-        return;
-      }
       const permission = backendPermission(invite.backendUrl);
       let alreadyGranted: boolean;
       let granted: boolean;
@@ -342,10 +367,22 @@ function renderInvite(invite: RoomInvite): void {
         }
         notice.textContent =
           response.state.error ?? 'Invitation is unavailable.';
-        return;
       }
-      await browser.tabs.create({ url: 'https://soundcloud.com/' });
     });
+}
+
+async function copyInvite(): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(
+      createRoomInvite(
+        currentState.backendUrl ?? '',
+        currentState.roomCode ?? '',
+      ),
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function formatRoomCode(value: string): string {
@@ -353,48 +390,45 @@ function formatRoomCode(value: string): string {
 }
 
 function renderSession(): void {
-  const connected = currentState.status === 'connected';
+  const statusText = {
+    connected: 'Connected',
+    connecting: 'Connecting…',
+    error: 'Connection problem',
+    idle: 'Not connected',
+  }[currentState.status];
+  const hosting = currentState.role === 'host';
   app.innerHTML = shell(`
-    <section>
-      <div class="session-status ${currentState.status}">
-        <b class="dot"></b>${connected ? 'In sync' : currentState.status}
-      </div>
-      <span class="step">03 / Listening</span>
-      <h2>${currentState.role === 'host' ? 'Your room' : 'Listening room'}</h2>
-      <button id="copy-code" class="room-code" type="button" aria-label="Copy room invitation">
-        <span id="room-code"></span>
-        <small>Click to copy invitation</small>
-      </button>
-      <dl>
-        <div><dt>Role</dt><dd id="role"></dd></div>
-        <div><dt>Listeners</dt><dd id="participants"></dd></div>
-      </dl>
-      <p id="notice" class="notice" role="status"></p>
-      <button id="leave" class="secondary" type="button">Leave room</button>
-    </section>
+    <div class="status is-${currentState.status}"><span class="dot"></span>${statusText}<span class="count" id="participants"></span></div>
+    <h1 class="title">${hosting ? 'Your room' : 'Listening along'}</h1>
+    <p class="lead">${hosting ? 'Play anything on SoundCloud in this tab. Everyone in the room follows.' : 'Playback follows the host. You can keep this tab in the background.'}</p>
+    <div class="code-box">
+      <span class="label">Room code</span>
+      <span id="room-code" class="code"></span>
+      <span id="role" class="sub"></span>
+    </div>
+    <button id="copy-code" class="btn btn-primary" type="button">Copy invite link</button>
+    <p id="notice" class="notice" role="status"></p>
+    <button id="leave" class="btn btn-secondary" type="button">Leave room</button>
   `);
   document.querySelector('#room-code')!.textContent = formatRoomCode(
     currentState.roomCode ?? '',
   );
-  document.querySelector('#role')!.textContent =
-    currentState.role ?? 'Connecting';
-  document.querySelector('#participants')!.textContent = String(
-    currentState.participantCount,
-  );
+  document.querySelector('#role')!.textContent = hosting
+    ? 'You are the host'
+    : 'The host controls playback';
+  document.querySelector('#participants')!.textContent =
+    currentState.participantCount > 0
+      ? `${currentState.participantCount} listening`
+      : '';
   const notice = document.querySelector<HTMLParagraphElement>('#notice')!;
   if (currentState.error) notice.textContent = currentState.error;
+  else if (Date.now() < sessionNoticeUntil) notice.textContent = sessionNotice;
   document.querySelector('#copy-code')!.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(
-        createRoomInvite(
-          currentState.backendUrl ?? '',
-          currentState.roomCode ?? '',
-        ),
-      );
-      notice.textContent = 'Invitation copied.';
-    } catch {
-      notice.textContent = 'Share the backend and room code manually.';
-    }
+    sessionNotice = (await copyInvite())
+      ? 'Invitation link copied.'
+      : 'Share the backend and room code manually.';
+    sessionNoticeUntil = Date.now() + 4_000;
+    notice.textContent = sessionNotice;
   });
   document.querySelector('#leave')!.addEventListener('click', async () => {
     const response = await send({ type: 'leave-room' });
@@ -422,10 +456,13 @@ function render(): void {
 
 async function refresh(): Promise<void> {
   try {
-    [currentState, activeInvite] = await Promise.all([
+    let tab: Awaited<ReturnType<typeof inspectActiveTab>>;
+    [currentState, tab] = await Promise.all([
       send({ type: 'get-state' }).then((response) => response.state),
-      invitationFromActiveTab(),
+      inspectActiveTab(),
     ]);
+    activeInvite = tab.invite;
+    onSoundCloud = tab.soundCloud;
     render();
   } catch {
     renderStart('Extension background is unavailable.');

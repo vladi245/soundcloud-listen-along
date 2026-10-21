@@ -30,11 +30,11 @@ The GitHub release workflow records SHA-256 checksums. Its private release is ma
 
 **Name:** SoundCloud Listen Along (Unofficial)
 
-**Summary:** Synchronize SoundCloud playback in private rooms using a Cloudflare backend you control.
+**Summary:** Listen to SoundCloud together: start a private room in one click and share the link.
 
 **Description:**
 
-SoundCloud Listen Along synchronizes track navigation, play and pause state, position, and seeks between a room host and guests. Audio continues to stream independently from SoundCloud. The extension has no project-operated room service, analytics, advertising, or public room directory. A host deploys the backend into their own Cloudflare account and shares a room invitation link.
+SoundCloud Listen Along synchronizes track navigation, play and pause state, position, and seeks between a room host and guests. Audio continues to stream independently from SoundCloud. Rooms run on a public room server by default, so no account or setup is needed: open a track, select Start a room, and share the copied invitation link. Hosts who prefer to control their own backend can deploy it to their own Cloudflare account. There is no analytics, advertising, or public room directory.
 
 This independent extension is not affiliated with, authorized by, sponsored by, or endorsed by SoundCloud.
 
@@ -43,13 +43,14 @@ This independent extension is not affiliated with, authorized by, sponsored by, 
 - `activeTab`: identifies the SoundCloud tab selected for synchronization and reads an invitation only after the user opens the popup from that tab.
 - `storage`: retains the selected backend preference and active ephemeral room state. Saving a room-creation key is explicit and optional.
 - SoundCloud content-script matches: observe and apply playback state only on SoundCloud pages.
+- Host access to the public room server: creates rooms and carries the synchronization WebSocket for the default backend.
 - Optional HTTPS host access: requested for the single self-hosted backend selected by the user. Failed and replaced manual configurations remove permissions when safe to do so.
 
 ## Chrome Web Store
 
 1. Register the publisher account and complete any required identity verification.
 2. Create an unlisted item and upload the Chromium ZIP.
-3. Add screenshots of first-run role selection, backend setup, room lobby, invitation acceptance, and connected state.
+3. Add screenshots of the room lobby, invitation acceptance, connected state, and own-server setup.
 4. Use the public privacy-policy URL and complete data-use disclosures from `docs/privacy.md`.
 5. Submit for review, record the final listing URL, and test installation plus automatic update behavior.
 

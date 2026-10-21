@@ -1,0 +1,36 @@
+# Project-operated public room server. Deploy with `npm run deploy:hosted`.
+# Self-hosters should use wrangler.toml instead.
+name = "soundcloud-listen-along"
+main = "src/index.ts"
+compatibility_date = "2026-07-20"
+workers_dev = true
+
+[vars]
+PUBLIC_ROOM_CREATION = "true"
+MAX_ROOM_CREATIONS_PER_MINUTE = "120"
+# INSTALL_URL = "https://chromewebstore.google.com/detail/..."
+
+# Extension packages and the Firefox update manifest, written by
+# `npm run release:hosted` in the repository root.
+[assets]
+directory = "./hosted-assets"
+binding = "ASSETS"
+
+[observability]
+enabled = false
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[durable_objects.bindings]]
+name = "CREATION_LIMITER"
+class_name = "CreationLimiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["CreationLimiter"]

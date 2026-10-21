@@ -16,6 +16,8 @@ stats-*.json
 coverage
 web-ext.config.ts
 .dev.vars
+.env.amo
+server/hosted-assets
 
 # Editor directories and files
 .vscode/*
