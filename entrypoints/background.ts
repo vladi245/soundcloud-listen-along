@@ -9,6 +9,7 @@ import {
   isRuntimeMessage,
   message,
   type ExtensionState,
+  type PlayerIssue,
   type RuntimeResponse,
 } from '@/lib/messages';
 import {
@@ -28,6 +29,7 @@ interface Session {
   hostToken?: string;
   creationKey?: string;
   pendingJoinTabId?: number;
+  endedTabId?: number;
   lastPlayback?: PlaybackState;
   sequence: number;
   serverOffset: number;
@@ -125,8 +127,10 @@ export default defineBackground(() => {
       .catch(() => undefined);
   };
 
-  const clearRoom = async (error?: string) => {
+  // With notifyTab, the room's SoundCloud tab keeps showing why it ended.
+  const clearRoom = async (error?: string, notifyTab = false) => {
     stopSocket();
+    const endedTabId = notifyTab ? session.tabId : undefined;
     const backendUrl = session.public.backendUrl;
     const maxParticipants = session.public.maxParticipants;
     const openRoomCreation = session.public.openRoomCreation;
@@ -139,10 +143,12 @@ export default defineBackground(() => {
         ...(openRoomCreation ? { openRoomCreation } : {}),
         hasCreationKey: Boolean(creationKey),
         ...(error ? { status: 'error' as const, error } : {}),
+        ...(error && endedTabId !== undefined ? { ended: error } : {}),
       },
       sequence: 0,
       serverOffset: 0,
       ...(creationKey ? { creationKey } : {}),
+      ...(endedTabId !== undefined ? { endedTabId } : {}),
     };
     await save();
   };
@@ -161,6 +167,7 @@ export default defineBackground(() => {
         ...session.public,
         status: 'connected',
         role: incoming.role,
+        hostConnected: true,
         participantCount: incoming.participantCount,
         error: undefined,
       };
@@ -189,7 +196,12 @@ export default defineBackground(() => {
       return;
     }
     if (incoming.type === 'presence') {
-      await setPublic({ participantCount: incoming.participantCount });
+      await setPublic({
+        participantCount: incoming.participantCount,
+        ...(incoming.hostConnected === undefined
+          ? {}
+          : { hostConnected: incoming.hostConnected }),
+      });
       return;
     }
     if (incoming.type === 'error') {
@@ -206,7 +218,7 @@ export default defineBackground(() => {
       return;
     }
     if (incoming.type === 'room-closed') {
-      await clearRoom(`Room closed: ${incoming.reason}`);
+      await clearRoom(roomClosedMessage(incoming.reason), true);
     }
   };
 
@@ -256,18 +268,19 @@ export default defineBackground(() => {
       heartbeat = null;
       socket = null;
       if (reconnect && session.public.roomCode) {
+        // Back off for about two minutes, longer than the host's grace period.
+        const delays = [1, 2, 4, 8, 15, 30, 30, 30];
+        const delay = delays[reconnectAttempts];
         reconnectAttempts += 1;
-        if (reconnectAttempts > 5) {
-          void clearRoom('Room is unavailable');
+        if (delay === undefined) {
+          void clearRoom('Lost the connection to the room', true);
           return;
         }
         void setPublic({ status: 'connecting' });
-        setTimeout(() => void connect(), 2_000);
+        setTimeout(() => void connect(), delay * 1_000);
       }
     });
-    socket.addEventListener('error', () => {
-      void setPublic({ status: 'error', error: 'Backend connection failed' });
-    });
+    // Errors are followed by a close event, which handles reconnecting.
   };
 
   const startRoom = async (
@@ -320,7 +333,10 @@ export default defineBackground(() => {
     try {
       if (request.type === 'get-state') {
         const inThisTab =
-          sender.tab?.id !== undefined && sender.tab.id === session.tabId;
+          sender.tab?.id !== undefined &&
+          (sender.tab.id === session.tabId ||
+            (Boolean(session.public.ended) &&
+              sender.tab.id === session.endedTabId));
         return { ok: true, state: { ...session.public, inThisTab } };
       }
       if (request.type === 'configure-backend') {
@@ -446,6 +462,9 @@ export default defineBackground(() => {
             await sendToTab(session.lastPlayback);
           }
         }
+      } else if (request.type === 'dismiss-notice') {
+        session.endedTabId = undefined;
+        await setPublic({ ended: undefined, error: undefined, status: 'idle' });
       } else if (request.type === 'resync') {
         if (
           sender.tab?.id === session.tabId &&
@@ -459,9 +478,13 @@ export default defineBackground(() => {
           sender.tab?.id === session.tabId &&
           session.public.role === 'guest' &&
           request.state.playing &&
-          (session.public.autoplayBlocked || session.public.error)
+          (session.public.playerIssue || session.public.error)
         ) {
-          await setPublic({ autoplayBlocked: false, error: undefined });
+          await setPublic({
+            autoplayBlocked: false,
+            playerIssue: undefined,
+            error: undefined,
+          });
         }
         if (
           sender.tab?.id === session.tabId &&
@@ -487,10 +510,8 @@ export default defineBackground(() => {
       } else if (request.type === 'player-error') {
         await setPublic({
           autoplayBlocked: request.code === 'autoplay_blocked',
-          error:
-            request.code === 'autoplay_blocked'
-              ? 'Start playback once in the SoundCloud tab'
-              : 'SoundCloud player is not ready',
+          playerIssue: request.code,
+          error: playerIssueMessage[request.code],
         });
       }
       return { ok: true, state: session.public };
@@ -504,6 +525,20 @@ export default defineBackground(() => {
   };
 
   browser.runtime.onMessage.addListener(handleMessage);
+  // Closing the room's tab leaves the room. A host leaving ends it for all.
+  browser.tabs.onRemoved.addListener((tabId) => {
+    void load().then(async () => {
+      if (tabId === session.endedTabId) {
+        session.endedTabId = undefined;
+        await setPublic({ ended: undefined });
+      }
+      if (tabId !== session.tabId || !session.public.roomCode) return;
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'leave' }));
+      }
+      await clearRoom();
+    });
+  });
   // Content scripts only reach pages loaded after installation, so reload any
   // open invitation pages to show their Join button right away.
   browser.runtime.onInstalled.addListener(async () => {
@@ -528,6 +563,28 @@ function backendError(value: unknown): string | null {
   if (!isRecord(error)) return null;
   const message = error.message;
   return typeof message === 'string' ? message : null;
+}
+
+const playerIssueMessage: Record<PlayerIssue, string> = {
+  autoplay_blocked: 'Start playback once in the SoundCloud tab',
+  player_unavailable:
+    "Couldn't start this track. It may need Go+ or be unavailable in your region.",
+  ad_playing: 'Waiting for a SoundCloud ad to finish',
+};
+
+function roomClosedMessage(reason: string): string {
+  switch (reason) {
+    case 'host_left':
+      return 'The host ended the room';
+    case 'host_disconnected':
+      return 'The host left the room';
+    case 'host_never_joined':
+      return 'The host never joined the room';
+    case 'inactive':
+      return 'The room closed after a long break';
+    default:
+      return 'The room has closed';
+  }
 }
 
 function isOpenCreation(metadata: {

@@ -32,7 +32,7 @@ export type ServerMessage =
       state?: PlaybackState;
     }
   | { type: 'playback'; state: PlaybackState; serverTime: number }
-  | { type: 'presence'; participantCount: number }
+  | { type: 'presence'; participantCount: number; hostConnected?: boolean }
   | { type: 'pong'; sentAt: number; serverTime: number }
   | { type: 'error'; code: string; message: string }
   | { type: 'room-closed'; reason: string };
@@ -142,7 +142,13 @@ export function parseServerMessage(value: unknown): ServerMessage | null {
     };
   }
   if (value.type === 'presence' && isCount(value.participantCount)) {
-    return { type: 'presence', participantCount: value.participantCount };
+    return {
+      type: 'presence',
+      participantCount: value.participantCount,
+      ...(typeof value.hostConnected === 'boolean'
+        ? { hostConnected: value.hostConnected }
+        : {}),
+    };
   }
   if (
     value.type === 'pong' &&

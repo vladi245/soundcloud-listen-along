@@ -9,11 +9,13 @@ import {
   message,
   isRuntimeMessage,
   type ExtensionState,
+  type PlayerIssue,
   type RuntimeResponse,
 } from '@/lib/messages';
 import {
   activatePageTrack,
   activeTrackUrl,
+  isAdPlaying,
   readPlaybackState,
   trackPageUrl,
 } from '@/lib/player';
@@ -39,18 +41,40 @@ export default defineContentScript({
       return { ...media, currentTime: media.currentTime + elapsed / 1_000 };
     };
 
+    const sendPlayback = (state: PlaybackState) =>
+      void browser.runtime
+        .sendMessage(message({ type: 'local-playback', state }))
+        .catch(() => undefined);
+
+    // The last real track state, so an ad can be reported as a pause there.
+    let lastTrackState: PlaybackState | null = null;
+    let adPausePublished = false;
+
     const publishState = () => {
       if (Date.now() < suppressEventsUntil) return;
+      if (isAdPlaying(document)) {
+        // Hold the room on the track instead of broadcasting the ad.
+        if (lastTrackState && !adPausePublished) {
+          adPausePublished = true;
+          sendPlayback({
+            ...lastTrackState,
+            playing: false,
+            sequence: sequence++,
+            capturedAt: Date.now(),
+          });
+        }
+        return;
+      }
+      adPausePublished = false;
       const current = currentMedia();
-      const trackUrl = activeTrackUrl(document) ?? trackPageUrl(location.href);
+      const trackUrl = activeTrackUrl(document);
       const state =
         current && trackUrl
           ? readPlaybackState(current, trackUrl, sequence++, Date.now())
           : null;
       if (state) {
-        void browser.runtime
-          .sendMessage(message({ type: 'local-playback', state }))
-          .catch(() => undefined);
+        lastTrackState = state;
+        sendPlayback(state);
       }
     };
 
@@ -86,7 +110,7 @@ export default defineContentScript({
         }, 3_000);
       });
 
-    const reportError = (code: 'player_unavailable' | 'autoplay_blocked') =>
+    const reportError = (code: PlayerIssue) =>
       browser.runtime
         .sendMessage(message({ type: 'player-error', code }))
         .catch(() => undefined);
@@ -117,10 +141,19 @@ export default defineContentScript({
       syncing = true;
       try {
         let navigatedTo: string | null = null;
+        let adWaits = 0;
         let activations = 0;
         for (let attempt = 0; attempt < 8; attempt += 1) {
           const state = latestRemote;
           if (!state) return;
+          if (isAdPlaying(document) && adWaits < 45) {
+            // Seeking or clicking now would act on the ad. Wait it out.
+            adWaits += 1;
+            await reportError('ad_playing');
+            attempt -= 1;
+            await wait(2_000);
+            continue;
+          }
           const onTrackPage = trackPageUrl(location.href) === state.trackUrl;
           const loaded =
             activeTrackUrl(document) === state.trackUrl ||
@@ -169,6 +202,7 @@ export default defineContentScript({
     const pill = createStatusPill({
       // The click itself counts as user activation, so playback is allowed.
       start: () => void send({ type: 'resync' }),
+      dismiss: () => void send({ type: 'dismiss-notice' }).then(refreshPill),
       copyInvite: async () => {
         if (!roomState?.backendUrl || !roomState.roomCode) return false;
         try {

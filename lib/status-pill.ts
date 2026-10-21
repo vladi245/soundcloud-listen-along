@@ -2,6 +2,7 @@ import type { ExtensionState } from './messages';
 
 export interface PillActions {
   start(): void;
+  dismiss(): void;
   copyInvite(): Promise<boolean>;
   leave(): void;
 }
@@ -66,7 +67,8 @@ export function createStatusPill(actions: PillActions) {
 
   const render = (state: ExtensionState) => {
     last = state;
-    if (!state.inThisTab || !state.roomCode) {
+    const ended = state.inThisTab && !state.roomCode ? state.ended : undefined;
+    if (!state.inThisTab || (!state.roomCode && !ended)) {
       unmount();
       return;
     }
@@ -76,16 +78,33 @@ export function createStatusPill(actions: PillActions) {
       state.participantCount > 1 ? `${state.participantCount} listening` : '';
     let tone = state.status;
     let text: string;
+    let detail = '';
     let primary: { label: string; run: () => void } | null = null;
+    let leave = true;
 
-    if (state.status === 'connecting') {
+    if (ended) {
+      tone = 'error';
+      text = ended;
+      primary = { label: 'Dismiss', run: actions.dismiss };
+      leave = false;
+    } else if (state.status === 'connecting') {
       text = 'Connecting to the room…';
     } else if (state.status === 'error') {
       text = state.error ?? 'Connection problem';
-    } else if (!hosting && state.autoplayBlocked) {
-      tone = 'connected';
+    } else if (!hosting && state.playerIssue === 'autoplay_blocked') {
       text = 'Your browser paused playback';
       primary = { label: 'Start listening', run: actions.start };
+    } else if (!hosting && state.playerIssue === 'ad_playing') {
+      tone = 'connecting';
+      text = 'Waiting for a SoundCloud ad to finish';
+    } else if (!hosting && state.playerIssue === 'player_unavailable') {
+      tone = 'error';
+      text = "Couldn't start this track";
+      detail = state.error ?? '';
+      primary = { label: 'Retry', run: actions.start };
+    } else if (!hosting && state.hostConnected === false) {
+      tone = 'connecting';
+      text = 'The host disconnected. Waiting for them…';
     } else if (hosting) {
       text = 'Hosting a room';
       primary = {
@@ -106,8 +125,10 @@ export function createStatusPill(actions: PillActions) {
     const signature = JSON.stringify([
       tone,
       text,
+      detail,
       count,
       primary?.label,
+      leave,
       pageIsDark(),
     ]);
     if (signature === rendered && shadow.childElementCount) return;
@@ -118,9 +139,10 @@ export function createStatusPill(actions: PillActions) {
         <span class="text"></span>
         ${count ? '<span class="count"></span>' : ''}
         ${primary ? '<button class="primary" type="button"></button>' : ''}
-        <button class="quiet leave" type="button">Leave</button>
+        ${leave ? '<button class="quiet leave" type="button">Leave</button>' : ''}
       </div>`;
     shadow.querySelector('.text')!.textContent = text;
+    if (detail) shadow.querySelector('.pill')!.setAttribute('title', detail);
     const countElement = shadow.querySelector('.count');
     if (countElement) countElement.textContent = count;
     const button = shadow.querySelector<HTMLButtonElement>('.primary');
@@ -129,8 +151,8 @@ export function createStatusPill(actions: PillActions) {
       button.addEventListener('click', primary.run);
     }
     shadow
-      .querySelector('.leave')!
-      .addEventListener('click', () => actions.leave());
+      .querySelector('.leave')
+      ?.addEventListener('click', () => actions.leave());
   };
 
   return { render };

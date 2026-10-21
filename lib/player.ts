@@ -44,6 +44,19 @@ export function activatePageTrack(document: Document): boolean {
   return true;
 }
 
+// SoundCloud marks audio ads in the bottom player. The exact markup is not
+// documented, so match ad-like class names or an "Advertisement" label.
+const adClass = /(^|[_-])(ad|ads|advert\w*)($|[_-])/i;
+
+export function isAdPlaying(document: Document): boolean {
+  const controls = document.querySelector('.playControls');
+  if (!controls) return false;
+  if (/\badvertisement\b/i.test(controls.textContent ?? '')) return true;
+  return Array.from(controls.querySelectorAll('[class]')).some((element) =>
+    Array.from(element.classList).some((name) => adClass.test(name)),
+  );
+}
+
 export type MediaState = Pick<
   HTMLMediaElement,
   'currentTime' | 'paused' | 'ended'
