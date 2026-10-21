@@ -4,7 +4,6 @@ import {
   createRoomInvite,
   normalizeBackendUrl,
   parseRoomInvite,
-  randomOpaqueId,
   type RoomInvite,
 } from '@/lib/backend';
 import { HOSTED_BACKEND_URL, isHostedBackend } from '@/lib/hosted';
@@ -23,7 +22,6 @@ import {
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 let currentState: ExtensionState = { status: 'idle', participantCount: 0 };
-let setupCreationKey = '';
 let activeInvite: RoomInvite | null = null;
 let onSoundCloud = false;
 let update: LatestRelease | null = null;
@@ -102,7 +100,6 @@ function renderStart(error?: string): void {
   `);
   if (error) document.querySelector('#notice')!.textContent = error;
   document.querySelector('#host-setup')!.addEventListener('click', () => {
-    setupCreationKey ||= randomOpaqueId(32);
     renderBackendForm('host');
   });
   document.querySelector('#guest-setup')!.addEventListener('click', () => {
@@ -112,24 +109,11 @@ function renderStart(error?: string): void {
 
 function renderBackendForm(mode: SetupMode, error?: string): void {
   const hosting = mode === 'host';
-  const newDeployment = hosting && Boolean(setupCreationKey);
   app.innerHTML = shell(`
     <button id="setup-back" class="link back" type="button">Back</button>
     <h1 class="title">${hosting ? 'Your room server' : "Host's room server"}</h1>
-    <p class="lead">${hosting ? (newDeployment ? 'Deploy a room server to your Cloudflare account, then enter its address.' : 'Enter your server address and room creation key.') : 'Paste the server address the host gave you.'}</p>
-    ${
-      newDeployment
-        ? `<div class="panel">
-            <span class="label">Room creation key</span>
-            <div class="row">
-              <code id="generated-key" class="key"></code>
-              <button id="copy-key" class="btn btn-small" type="button">Copy</button>
-            </div>
-            <p class="fine">Paste this key as <code>ROOM_CREATION_KEY</code> while deploying.</p>
-            <a class="btn btn-secondary" href="https://deploy.workers.cloudflare.com/?url=https://github.com/vladi245/soundcloud-listen-along-server" target="_blank" rel="noreferrer">Deploy to Cloudflare</a>
-          </div>`
-        : ''
-    }
+    <p class="lead">${hosting ? 'Enter your server address and room creation key.' : 'Paste the server address the host gave you.'}</p>
+    ${hosting ? '<a class="link" href="https://github.com/vladi245/soundcloud-listen-along/blob/main/docs/deployment.md#self-hosted-deployment" target="_blank" rel="noreferrer">How to run your own server</a>' : ''}
     <form id="backend-form" class="form">
       <label for="backend">Server address</label>
       <input id="backend" name="backend" type="url" placeholder="https://rooms.example.workers.dev" autocomplete="url" required>
@@ -166,20 +150,6 @@ function renderBackendForm(mode: SetupMode, error?: string): void {
     if (response.ok) render();
     else notice.textContent = response.state.error ?? 'Server unavailable.';
   });
-  if (newDeployment) {
-    const keyInput = document.querySelector<HTMLInputElement>('#creation-key')!;
-    keyInput.value = setupCreationKey;
-    document.querySelector('#generated-key')!.textContent = setupCreationKey;
-    document.querySelector('#copy-key')!.addEventListener('click', async () => {
-      const notice = document.querySelector<HTMLParagraphElement>('#notice')!;
-      try {
-        await navigator.clipboard.writeText(setupCreationKey);
-        notice.textContent = 'Deployment key copied.';
-      } catch {
-        notice.textContent = 'Select and copy the deployment key manually.';
-      }
-    });
-  }
   const notice = document.querySelector<HTMLParagraphElement>('#notice')!;
   if (error) notice.textContent = error;
   document
@@ -318,7 +288,6 @@ function renderLobby(): void {
   });
   document.querySelector('#change-backend')!.addEventListener('click', () => {
     if (currentState.hasCreationKey || hosted) {
-      setupCreationKey = '';
       renderBackendForm('host');
     } else {
       renderBackendForm('guest');
