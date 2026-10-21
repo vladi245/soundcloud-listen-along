@@ -4,6 +4,7 @@ import {
   isRoomCode,
   parseClientMessage,
   type ClientMessage,
+  type Participant,
   type PlaybackState,
   type Role,
   type ServerMessage,
@@ -21,6 +22,7 @@ const HOST_JOIN_MS = 5 * 60 * 1000;
 const SOCKET_JOIN_MS = 10 * 1000;
 const CREATION_WINDOW_MS = 60 * 1000;
 const MAX_CREATIONS_PER_WINDOW = 30;
+const RENAME_INTERVAL_MS = 2_000;
 const MAX_CLIENT_CREATIONS_PER_WINDOW = 6;
 const CLIENT_BUCKET_MS = 60 * 60 * 1000;
 const ROOM_KEY = 'room';
@@ -54,6 +56,10 @@ interface SocketAttachment {
   connectedAt?: number;
   participantId?: string;
   role?: Role;
+  memberId?: string;
+  name?: string | null;
+  joinedAt?: number;
+  renamedAt?: number;
 }
 
 interface RateRecord {
@@ -88,6 +94,8 @@ const landingPage = `<!doctype html>
     <h1 data-view="home" hidden>Listen to SoundCloud together</h1>
     <p data-view="home" class="intro" hidden>Start a room from any SoundCloud track and share the link. Everyone in the room hears what you play, in sync.</p>
     <div id="join" hidden>
+      <label for="join-name">Your nickname</label>
+      <input id="join-name" maxlength="24" placeholder="Listener" autocomplete="nickname" spellcheck="false">
       <button id="join-button" type="button">Join room</button>
       <p id="join-status" class="status" role="status"></p>
       <p class="fine">Joining shares the current track link and playback position with the room server while you are connected.</p>
@@ -130,15 +138,16 @@ const privacyPage = `<!doctype html>
     <ul>
       <li>the link of the SoundCloud track playing in the room's tab;</li>
       <li>whether it is playing or paused, its position, and seeks or track changes;</li>
-      <li>a random room code, a random participant ID, and for hosts a random host token.</li>
+      <li>a random room code, a random participant ID, and for hosts a random host token;</li>
+      <li>the nickname you choose, if you set one. Everyone in the room sees it.</li>
     </ul>
     <p>It sends no SoundCloud account details, cookies, passwords, names, email addresses, messages or audio. Audio streams from SoundCloud directly to each listener.</p>
     <h2>What the server keeps</h2>
-    <p>Each room stores its code, host token, latest playback state and activity times. A room is deleted when the host leaves, five minutes after creation if the host never joins, one minute after the host disconnects, or after six hours without activity.</p>
+    <p>Each room stores its code, host token, latest playback state and activity times. Nicknames are held only for the connections that are open and are gone once you leave. A room is deleted when the host leaves, five minutes after creation if the host never joins, one minute after the host disconnects, or after six hours without activity.</p>
     <p>To limit abuse, the server counts room creations per client under a hash of the IP address combined with the current hour, kept for one minute. The IP address itself is not stored.</p>
     <p>The server runs on Cloudflare, which processes connection data such as IP addresses to deliver the service. Request logging for this server is turned off.</p>
     <h2>What stays in your browser</h2>
-    <p>The extension remembers the selected room server, a room creation key for your own server only if you choose to save it, and, for the current browser session, the active room. Nothing is used for advertising, analytics or profiling, and nothing is sold or shared.</p>
+    <p>The extension remembers the selected room server, your nickname, a room creation key for your own server only if you choose to save it, and, for the current browser session, the active room. Nothing is used for advertising, analytics or profiling, and nothing is sold or shared.</p>
     <h2>Your choices</h2>
     <p>Leaving a room or closing its tab stops all sending. Removing the extension deletes its local data. You can also use your own room server instead of the public one.</p>
     <p class="fine">Last updated October 2026.</p>
@@ -155,7 +164,7 @@ if (!invite) document.title = 'Listen Along';
 addEventListener('hashchange', () => location.reload());
 `;
 
-const landingCss = `:root{--orange:#f50;--bg:#fff;--text:#333;--muted:#999;--line:#e5e5e5;color:var(--text);background:var(--bg);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}@media (prefers-color-scheme:dark){:root{--bg:#121212;--text:#f2f2f2;--muted:#8c8c8c;--line:#2b2b2b}}body{margin:0;min-height:100vh;display:grid;place-items:center}main{box-sizing:border-box;width:min(480px,calc(100% - 32px));padding:32px 0}.brand{display:flex;align-items:center;gap:8px;margin:0 0 24px;font-weight:600}.mark{width:28px;height:28px}h1{margin:0 0 20px;font-size:24px;font-weight:600;line-height:1.3}h2{margin:20px 0 8px;font-size:15px;font-weight:600}[hidden]{display:none!important}.intro{margin:-8px 0 8px;color:var(--muted)}.has-extension{display:none}[data-extension] .has-extension{display:block}[data-extension] .needs-install{display:none}.has-extension p+p{margin-top:16px}.second{margin-top:10px}p{margin:0}.button{display:inline-block;height:40px;padding:0 24px;border-radius:3px;color:#fff;background:var(--orange);font-weight:600;line-height:40px;text-decoration:none}.button:hover{background:#e64d00}details{margin-top:12px;color:var(--muted);font-size:14px}summary{cursor:pointer}details ol{margin-top:8px;color:var(--text)}code{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}ol{margin:0;padding-left:20px}li{margin:6px 0}a{color:var(--orange)}.fine{margin:24px 0 0;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}#join-button{height:40px;padding:0 24px;border:0;border-radius:3px;color:#fff;background:var(--orange);font:inherit;font-weight:600;cursor:pointer}#join-button:hover{background:#e64d00}#join-button:disabled{opacity:.5;cursor:default}.status{margin:12px 0 0;color:var(--orange);font-size:14px}.status:empty{display:none}#join .fine{border-top:0;padding-top:0;margin-top:12px}.policy h2{margin-top:28px}.policy p,.policy li{color:var(--text)}.policy ul{margin:8px 0 0;padding-left:20px}.policy p+p{margin-top:10px}`;
+const landingCss = `:root{--orange:#f50;--bg:#fff;--text:#333;--muted:#999;--line:#e5e5e5;color:var(--text);background:var(--bg);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}@media (prefers-color-scheme:dark){:root{--bg:#121212;--text:#f2f2f2;--muted:#8c8c8c;--line:#2b2b2b}}body{margin:0;min-height:100vh;display:grid;place-items:center}main{box-sizing:border-box;width:min(480px,calc(100% - 32px));padding:32px 0}.brand{display:flex;align-items:center;gap:8px;margin:0 0 24px;font-weight:600}.mark{width:28px;height:28px}h1{margin:0 0 20px;font-size:24px;font-weight:600;line-height:1.3}h2{margin:20px 0 8px;font-size:15px;font-weight:600}[hidden]{display:none!important}.intro{margin:-8px 0 8px;color:var(--muted)}.has-extension{display:none}[data-extension] .has-extension{display:block}[data-extension] .needs-install{display:none}.has-extension p+p{margin-top:16px}.second{margin-top:10px}p{margin:0}.button{display:inline-block;height:40px;padding:0 24px;border-radius:3px;color:#fff;background:var(--orange);font-weight:600;line-height:40px;text-decoration:none}.button:hover{background:#e64d00}details{margin-top:12px;color:var(--muted);font-size:14px}summary{cursor:pointer}details ol{margin-top:8px;color:var(--text)}code{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}ol{margin:0;padding-left:20px}li{margin:6px 0}a{color:var(--orange)}.fine{margin:24px 0 0;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}#join label{display:block;margin:0 0 6px;font-size:14px;font-weight:600}#join-name{box-sizing:border-box;display:block;width:min(280px,100%);height:40px;margin:0 0 12px;padding:0 12px;border:1px solid var(--line);border-radius:3px;color:var(--text);background:var(--bg);font:inherit}#join-name:focus{outline:none;border-color:var(--orange)}#join-button{height:40px;padding:0 24px;border:0;border-radius:3px;color:#fff;background:var(--orange);font:inherit;font-weight:600;cursor:pointer}#join-button:hover{background:#e64d00}#join-button:disabled{opacity:.5;cursor:default}.status{margin:12px 0 0;color:var(--orange);font-size:14px}.status:empty{display:none}#join .fine{border-top:0;padding-top:0;margin-top:12px}.policy h2{margin-top:28px}.policy p,.policy li{color:var(--text)}.policy ul{margin:8px 0 0;padding-left:20px}.policy p+p{margin-top:10px}`;
 
 export function createRoomCode(random: Uint8Array): string {
   if (random.length !== ROOM_CODE_LENGTH) {
@@ -188,12 +197,14 @@ export function isStrictClientMessage(value: unknown): value is ClientMessage {
   if (!message || !isRecord(value)) return false;
 
   if (message.type === 'join') {
-    return hasExactKeys(
-      value,
-      value.hostToken === undefined
-        ? ['type', 'version', 'roomCode', 'participantId']
-        : ['type', 'version', 'roomCode', 'participantId', 'hostToken'],
-    );
+    return hasExactKeys(value, [
+      'type',
+      'version',
+      'roomCode',
+      'participantId',
+      ...(value.hostToken === undefined ? [] : ['hostToken']),
+      ...(value.name === undefined ? [] : ['name']),
+    ]);
   }
   if (message.type === 'playback') {
     return (
@@ -209,6 +220,7 @@ export function isStrictClientMessage(value: unknown): value is ClientMessage {
     );
   }
   if (message.type === 'ping') return hasExactKeys(value, ['type', 'sentAt']);
+  if (message.type === 'rename') return hasExactKeys(value, ['type', 'name']);
   return hasExactKeys(value, ['type']);
 }
 
@@ -533,17 +545,19 @@ export class Room implements DurableObject {
       this.rejectSocket(ws, 'invalid_message', 'Invalid protocol message');
       return;
     }
+    // Act on the parsed copy, which carries normalized values such as names.
+    const message = parseClientMessage(value)!;
 
     const attachment = socketAttachment(ws);
     if (!attachment.joined) {
-      if (value.type !== 'join') {
+      if (message.type !== 'join') {
         this.rejectSocket(ws, 'join_required', 'First message must be join');
         return;
       }
-      await this.join(ws, value);
+      await this.join(ws, message);
       return;
     }
-    if (value.type === 'join') {
+    if (message.type === 'join') {
       this.send(ws, {
         type: 'error',
         code: 'already_joined',
@@ -551,7 +565,7 @@ export class Room implements DurableObject {
       });
       return;
     }
-    await this.handleJoinedMessage(ws, attachment, value);
+    await this.handleJoinedMessage(ws, attachment, message);
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
@@ -650,6 +664,11 @@ export class Room implements DurableObject {
       joined: true,
       participantId: message.participantId,
       role,
+      memberId: createRoomCode(
+        crypto.getRandomValues(new Uint8Array(ROOM_CODE_LENGTH)),
+      ).slice(0, 8),
+      name: message.name ?? null,
+      joinedAt: Date.now(),
     };
     ws.serializeAttachment(attachment);
 
@@ -667,12 +686,10 @@ export class Room implements DurableObject {
       participantCount,
       serverTime: Date.now(),
       ...(room.snapshot ? { state: room.snapshot } : {}),
+      memberId: attachment.memberId,
+      participants: this.participants(),
     });
-    this.broadcast({
-      type: 'presence',
-      participantCount,
-      hostConnected: this.hasJoinedHost(),
-    });
+    this.broadcastPresence();
   }
 
   private async handleJoinedMessage(
@@ -692,6 +709,28 @@ export class Room implements DurableObject {
     if (message.type === 'ping') {
       await this.saveRoom(room);
       this.send(ws, { type: 'pong', sentAt: message.sentAt, serverTime: now });
+      return;
+    }
+    if (message.type === 'rename') {
+      // Each rename is broadcast to the room, so limit how often it happens.
+      if (
+        attachment.renamedAt &&
+        now - attachment.renamedAt < RENAME_INTERVAL_MS
+      ) {
+        this.send(ws, {
+          type: 'error',
+          code: 'rename_too_fast',
+          message: 'Wait a moment before renaming again',
+        });
+        return;
+      }
+      ws.serializeAttachment({
+        ...attachment,
+        name: message.name,
+        renamedAt: now,
+      });
+      await this.saveRoom(room);
+      this.broadcastPresence();
       return;
     }
     if (message.type === 'leave') {
@@ -738,10 +777,33 @@ export class Room implements DurableObject {
       room.hostMissingSince ??= Date.now();
       await this.saveRoom(room);
     }
+    this.broadcastPresence(ws);
+  }
+
+  private participants(excluding?: WebSocket): Participant[] {
+    return this.state
+      .getWebSockets()
+      .filter((socket) => socket !== excluding)
+      .map(socketAttachment)
+      .filter((attachment) => attachment.joined && attachment.memberId)
+      .sort(
+        (a, b) =>
+          Number(b.role === 'host') - Number(a.role === 'host') ||
+          (a.joinedAt ?? 0) - (b.joinedAt ?? 0),
+      )
+      .map((attachment) => ({
+        id: attachment.memberId!,
+        name: attachment.name ?? null,
+        role: attachment.role ?? 'guest',
+      }));
+  }
+
+  private broadcastPresence(excluding?: WebSocket): void {
     this.broadcast({
       type: 'presence',
-      participantCount: this.participantCount(ws),
-      hostConnected: this.hasJoinedHost(ws),
+      participantCount: this.participantCount(excluding),
+      hostConnected: this.hasJoinedHost(excluding),
+      participants: this.participants(excluding),
     });
   }
 

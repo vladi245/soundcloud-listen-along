@@ -15,6 +15,7 @@ import {
 import {
   isOpaqueId,
   isRoomCode,
+  normalizeNickname,
   normalizeRoomCode,
   parseServerMessage,
   PROTOCOL_VERSION,
@@ -44,6 +45,7 @@ interface BackendPreferences {
 
 const storageKey = 'active-session';
 const preferenceKey = 'backend-preferences';
+const nicknameKey = 'nickname';
 const idleState: ExtensionState = {
   status: 'idle',
   participantCount: 0,
@@ -63,10 +65,12 @@ export default defineBackground(() => {
 
   const load = async () => {
     if (loaded) return;
-    const [storedSession, storedPreferences] = await Promise.all([
-      browser.storage.session.get(storageKey),
-      browser.storage.local.get(preferenceKey),
-    ]);
+    const [storedSession, storedPreferences, storedNickname] =
+      await Promise.all([
+        browser.storage.session.get(storageKey),
+        browser.storage.local.get(preferenceKey),
+        browser.storage.local.get(nicknameKey),
+      ]);
     const candidate = storedSession[storageKey] as Session | undefined;
     const preferences = storedPreferences[preferenceKey] as
       BackendPreferences | undefined;
@@ -90,6 +94,8 @@ export default defineBackground(() => {
       session.public.openRoomCreation = true;
     }
     session.public.hasCreationKey = Boolean(session.creationKey);
+    session.public.nickname =
+      normalizeNickname(storedNickname[nicknameKey]) ?? undefined;
     loaded = true;
   };
 
@@ -134,6 +140,7 @@ export default defineBackground(() => {
     const backendUrl = session.public.backendUrl;
     const maxParticipants = session.public.maxParticipants;
     const openRoomCreation = session.public.openRoomCreation;
+    const nickname = session.public.nickname;
     const creationKey = session.creationKey;
     session = {
       public: {
@@ -141,6 +148,7 @@ export default defineBackground(() => {
         ...(backendUrl ? { backendUrl } : {}),
         ...(maxParticipants ? { maxParticipants } : {}),
         ...(openRoomCreation ? { openRoomCreation } : {}),
+        ...(nickname ? { nickname } : {}),
         hasCreationKey: Boolean(creationKey),
         ...(error ? { status: 'error' as const, error } : {}),
         ...(error && endedTabId !== undefined ? { ended: error } : {}),
@@ -168,6 +176,8 @@ export default defineBackground(() => {
         status: 'connected',
         role: incoming.role,
         hostConnected: true,
+        memberId: incoming.memberId,
+        participants: incoming.participants,
         participantCount: incoming.participantCount,
         error: undefined,
       };
@@ -201,6 +211,9 @@ export default defineBackground(() => {
         ...(incoming.hostConnected === undefined
           ? {}
           : { hostConnected: incoming.hostConnected }),
+        ...(incoming.participants
+          ? { participants: incoming.participants }
+          : {}),
       });
       return;
     }
@@ -246,6 +259,7 @@ export default defineBackground(() => {
           roomCode,
           participantId: session.participantId,
           ...(session.hostToken ? { hostToken: session.hostToken } : {}),
+          ...(session.public.nickname ? { name: session.public.nickname } : {}),
         }),
       );
       socket?.send(JSON.stringify({ type: 'ping', sentAt: Date.now() }));
@@ -461,6 +475,19 @@ export default defineBackground(() => {
           if (session.public.role === 'guest' && session.lastPlayback) {
             await sendToTab(session.lastPlayback);
           }
+        }
+      } else if (request.type === 'set-nickname') {
+        const nickname = normalizeNickname(request.name) ?? undefined;
+        if (nickname) {
+          await browser.storage.local.set({ [nicknameKey]: nickname });
+        } else {
+          await browser.storage.local.remove(nicknameKey);
+        }
+        await setPublic({ nickname });
+        if (socket?.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({ type: 'rename', name: nickname ?? null }),
+          );
         }
       } else if (request.type === 'dismiss-notice') {
         session.endedTabId = undefined;

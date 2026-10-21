@@ -354,6 +354,53 @@ input#room-code {
   text-transform: capitalize;
 }
 
+.name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.name-field input {
+  font-weight: 400;
+}
+
+.members ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.members li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.members li:last-child {
+  border-bottom: 0;
+}
+
+.members li > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.members .unnamed,
+.members .tag {
+  color: var(--muted);
+}
+
+.members .tag {
+  flex: none;
+  font-size: 12px;
+}
+
 /* Session status */
 
 .status {

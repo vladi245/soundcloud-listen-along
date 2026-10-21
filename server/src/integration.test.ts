@@ -181,4 +181,61 @@ describe('room service', () => {
     const after = await SELF.fetch(`https://rooms.example/rooms/${roomCode}`);
     expect(after.status).toBe(404);
   });
+
+  it('shares nicknames and lists room members', async () => {
+    const created = await SELF.fetch('https://rooms.example/rooms', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer integration-test-key' },
+    });
+    const { roomCode, hostToken } = await created.json<{
+      roomCode: string;
+      hostToken: string;
+    }>();
+    const join = async (extra: Record<string, string>) => {
+      const response = await SELF.fetch(
+        `https://rooms.example/rooms/${roomCode}/socket`,
+        { headers: { Upgrade: 'websocket' } },
+      );
+      const socket = response.webSocket!;
+      socket.accept();
+      const messages: { type: string; [key: string]: unknown }[] = [];
+      socket.addEventListener('message', (event) => {
+        messages.push(JSON.parse(event.data as string));
+      });
+      socket.send(
+        JSON.stringify({ type: 'join', version: 1, roomCode, ...extra }),
+      );
+      return { socket, messages };
+    };
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 100));
+    const latestMembers = (messages: { [key: string]: unknown }[]) =>
+      [...messages].reverse().find((message) => message.participants)
+        ?.participants as { name: string | null; role: string }[];
+
+    await join({
+      participantId: 'host-participant-0002',
+      hostToken,
+      name: '  DJ\u0000 Cloud  ',
+    });
+    await settle();
+    const guest = await join({ participantId: 'guest-participant-002' });
+    await settle();
+    expect(
+      latestMembers(guest.messages).map(({ name, role }) => ({ name, role })),
+    ).toEqual([
+      { name: 'DJ Cloud', role: 'host' },
+      { name: null, role: 'guest' },
+    ]);
+
+    guest.socket.send(JSON.stringify({ type: 'rename', name: 'Sam' }));
+    await settle();
+    expect(latestMembers(guest.messages)[1].name).toBe('Sam');
+
+    guest.socket.send(JSON.stringify({ type: 'rename', name: 'Sammy' }));
+    await settle();
+    expect(guest.messages).toContainEqual(
+      expect.objectContaining({ type: 'error', code: 'rename_too_fast' }),
+    );
+    expect(latestMembers(guest.messages)[1].name).toBe('Sam');
+  });
 });
