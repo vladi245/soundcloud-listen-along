@@ -1,5 +1,7 @@
 # Chrome Web Store (unlisted)
 
+> Not currently pursued: the store charges a one-time US$5 registration fee. Chromium users load the extension unpacked and get an in-popup notice when a newer version is published. This kit is ready if that changes.
+
 An unlisted item is not searchable; only people with the link can install it. Chrome then installs and updates it like any store extension.
 
 ## Files

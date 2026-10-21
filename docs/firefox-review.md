@@ -2,54 +2,27 @@
 
 ## Status
 
-Firefox distribution is planned through unlisted signing on addons.mozilla.org (AMO). No signed Firefox package is currently distributed, and this project does not claim AMO approval or review readiness.
-
-Submission artifacts and reviewer copy are maintained in [browser store submission](store-submission.md). The canonical public privacy policy is exported to the [backend template repository](https://github.com/vladi245/soundcloud-listen-along-server/blob/main/PRIVACY.md).
-
-The current command builds a Manifest V3 artifact:
-
-```sh
-npm ci
-npm run typecheck
-npm run build:firefox
-npm run zip:firefox
-```
-
-The unpacked build is written to `.output/firefox-mv3/`; the zip command writes its archive under `.output/`.
+Firefox builds are signed by addons.mozilla.org (AMO) as an unlisted add-on and self-distributed from the public room server, which also serves `updates.json` for automatic updates. `npm run release:hosted` builds, signs, and publishes each version (see [deployment](deployment.md#extension-packages)). The privacy policy is served at `https://soundcloud-listen-along.vladi245.workers.dev/privacy`.
 
 ## Current extension surface
 
 - Extension ID: `soundcloud-listen-along@vladi245.github.io`
-- Permissions: `activeTab`, `storage`
-- Content-script matches: `https://soundcloud.com/*`, `https://*.soundcloud.com/*`
+- Permissions: `activeTab`, `storage`; host access to the public room server; optional host access for a user-chosen own server
+- Content-script matches: `https://soundcloud.com/*`, `https://*.soundcloud.com/*`, and the public room server's invitation page
 - Background worker: manages one room session and the configured backend
-- Content script: reads and applies native audio playback state
+- Content scripts: a page-world bridge that reads and applies SoundCloud's playback state, an isolated script that relays it and shows the room status, and a Join room button on invitation pages
 - Remote code: none in project source
 - Analytics or advertising: none in project source
 - Backend communication: HTTPS room creation and WSS room synchronization
 
 The manifest requires Firefox 140 or newer and declares `browsingActivity` and `websiteActivity`. These cover the SoundCloud track URL and the playback actions (play, pause, position, and seeks) sent to the room server while the user is in a room. Room codes and host tokens are short-lived room credentials issued by that server, not account logins, and the extension handles no names, email addresses, or other personal identifiers.
 
-## Planned submission checklist
+## Reviewer explanation
 
-- Finish and document the behavior being submitted.
-- Confirm the stable extension ID, version, and Manifest V3 support requirements.
-- Keep manifest and AMO data declarations aligned with the implementation.
-- Justify `activeTab`, `storage`, and SoundCloud host matching in reviewer notes.
-- Remove unused permissions and ensure user-facing controls match the declarations.
-- Confirm that all executable code is packaged locally and reproducible from source.
-- Include exact build instructions, Node.js/npm prerequisites, and the lockfile.
-- Run `npm ci`, `npm run typecheck`, `npm run build:firefox`, and `npm run zip:firefox` from a clean checkout.
-- Review third-party licenses and source-code submission requirements.
-- Update [privacy](privacy.md) for implemented local storage and backend fields.
-- Test install, popup behavior, tab matching, room exit, data deletion, reconnect, and update behavior on supported Firefox versions.
+The extension synchronizes SoundCloud playback between participants in a private room. Audio is never downloaded or relayed; each listener plays the track from SoundCloud. Rooms run on a public room server operated by the maintainer by default, or on a server the user deploys. The SoundCloud content scripts read and apply playback state; a page-world script is needed because SoundCloud plays audio through media elements that are not attached to the document. `storage` keeps the selected server and the active session; `activeTab` reads the current tab when the popup opens.
 
-## Proposed reviewer explanation
+Unlisted signing limits public AMO discovery; it does not waive Mozilla policies or review requirements.
 
-The extension is intended to synchronize playback state between participants in a private room hosted on a backend selected by those participants. It does not download or redistribute audio and does not provide a public central service. The content script is limited to SoundCloud pages to read and apply supported playback state; the background worker coordinates extension state and the selected backend; `storage` retains user-selected configuration and session state. This explanation must be revised to match the final implementation before submission.
+## Source archive
 
-Unlisted signing limits public AMO discovery; it does not waive Mozilla policies or review requirements. A signed artifact should be distributed only with the applicable privacy notice, source revision, checksum, and installation instructions.
-
-## Packaging
-
-Run `REQUIRE_RELEASE_TAG=1 npm run release:package` from a clean, exactly tagged checkout. WXT creates the unsigned Firefox package and its matching source archive in `.output/`. Submit both to AMO for unlisted signing. Reviewers can reproduce the extension from that source archive with `npm ci`, `npm run typecheck`, and `npm run build:firefox`. Do not publish the unsigned Firefox ZIP as an installable release.
+Each submission includes the source archive created by `npm run zip:firefox`. Reviewers can reproduce the extension from it with `npm ci`, `npm run typecheck`, and `npm run build:firefox` on Node.js 22. Built packages and store images are excluded from the archive.

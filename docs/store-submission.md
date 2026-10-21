@@ -1,6 +1,6 @@
 # Browser Store Submission
 
-The intended distribution is an unlisted Chrome Web Store listing and an unlisted AMO-signed Firefox package. Store accounts, acceptance, and listing URLs are external prerequisites and are not represented as complete until each store confirms them.
+Firefox builds are signed by AMO as an unlisted add-on and served, with automatic updates, from the public room server by `npm run release:hosted` (see [deployment](deployment.md#extension-packages)). Chromium users load the extension unpacked; a Chrome Web Store listing is optional and not currently pursued (see [Chrome Web Store](chrome-web-store.md)).
 
 ## Release artifacts
 
@@ -13,18 +13,18 @@ REQUIRE_RELEASE_TAG=1 npm run release:package
 
 The tag must match the package version as `vX.Y.Z`. The command checks source formatting, lint, types, extension and Worker tests, both production manifests, and release filenames. It produces:
 
-- `soundcloud-listen-along-X.Y.Z-chrome.zip` for Chrome Web Store submission;
+- `soundcloud-listen-along-X.Y.Z-chrome.zip`, the Chromium package;
 - `soundcloud-listen-along-X.Y.Z-firefox.zip` for AMO unlisted signing;
 - `soundcloud-listen-along-X.Y.Z-sources.zip` for AMO source review.
 
-The GitHub release workflow records SHA-256 checksums. Its private release is maintainer provenance, not the end-user installation channel.
+The GitHub release workflow records SHA-256 checksums as build provenance. End users install from the public room server, not from GitHub releases.
 
 ## Public references
 
-- Privacy policy: `https://github.com/vladi245/soundcloud-listen-along-server/blob/main/PRIVACY.md`
-- Backend template: `https://github.com/vladi245/soundcloud-listen-along-server`
-- Public support: `https://github.com/vladi245/soundcloud-listen-along-server/issues`
-- Private vulnerability reports: `https://github.com/vladi245/soundcloud-listen-along-server/security/advisories/new`
+- Privacy policy: `https://soundcloud-listen-along.vladi245.workers.dev/privacy`
+- Install page: `https://soundcloud-listen-along.vladi245.workers.dev`
+- Public support: `https://github.com/vladi245/soundcloud-listen-along/issues`
+- Private vulnerability reports: `https://github.com/vladi245/soundcloud-listen-along/security/advisories/new`
 
 ## Listing copy
 
@@ -48,11 +48,7 @@ This independent extension is not affiliated with, authorized by, sponsored by, 
 
 ## Chrome Web Store
 
-1. Register the publisher account and complete any required identity verification.
-2. Create an unlisted item and upload the Chromium ZIP.
-3. Add screenshots of the room lobby, invitation acceptance, connected state, and own-server setup.
-4. Use the public privacy-policy URL and complete data-use disclosures from `docs/privacy.md`.
-5. Submit for review, record the final listing URL, and test installation plus automatic update behavior.
+Not currently pursued. The complete listing kit, with text, permission justifications, data answers, and images, is in [Chrome Web Store](chrome-web-store.md).
 
 ## Firefox AMO
 
@@ -60,8 +56,7 @@ This independent extension is not affiliated with, authorized by, sponsored by, 
 2. Upload the Firefox ZIP as an unlisted add-on with the matching source ZIP.
 3. Supply the exact Node.js 22 build commands and permission explanation from this document.
 4. Keep AMO data-collection declarations aligned with `docs/privacy.md` and the submitted version.
-5. Download the signed XPI, verify its checksum and installation, and distribute only that signed artifact.
-6. Define and test the signed-update path before promising automatic Firefox updates.
+5. Download the signed XPI, verify its installation, and distribute only that signed artifact. `npm run release:hosted` performs steps 2 to 5 and publishes `updates.json`.
 
 Unsigned Firefox ZIP files must never be presented as normally installable packages.
 

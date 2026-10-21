@@ -95,7 +95,7 @@ function shell(content: string): string {
 function renderStart(error?: string): void {
   app.innerHTML = shell(`
     <h1 class="title">Listen together</h1>
-    <p class="lead">Host with your own room server, or join with a server address from the host.</p>
+    <p class="lead">Connect a room server to host, or join with the server address the host gave you.</p>
     <button id="host-setup" class="btn btn-primary" type="button">Host a room</button>
     <button id="guest-setup" class="btn btn-secondary" type="button">Join a room</button>
     <p id="notice" class="notice" role="status"></p>
