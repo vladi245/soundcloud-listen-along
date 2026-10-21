@@ -4,7 +4,7 @@
 
 The extension uses a project-operated public room server by default. It runs the same Worker with `wrangler.hosted.toml`, which enables `PUBLIC_ROOM_CREATION` so rooms can be created without a key. Room creation is limited per client (six per minute, keyed by an hourly-rotating hash of the client address) and globally (`MAX_ROOM_CREATIONS_PER_MINUTE`).
 
-Maintainer deployment, from `server/`:
+Deploy the public server from `server/`:
 
 ```sh
 npx wrangler login
@@ -67,7 +67,7 @@ This setting is an origin filter, not participant authentication. Guests are adm
 
 ## Room creation key
 
-The Worker requires an operator-defined secret before it creates rooms. Generate a long random value, for example with `openssl rand -base64 32`, and from `server/` set it without writing it to the repository:
+Set a secret before creating rooms. Generate a long random value, for example with `openssl rand -base64 32`, and from `server/` set it without writing it to the repository:
 
 ```sh
 npx wrangler secret put ROOM_CREATION_KEY
@@ -91,7 +91,7 @@ Wrangler creates the Worker, applies pending Durable Object migrations, and prin
 https://soundcloud-listen-along-server.<workers-subdomain>.workers.dev
 ```
 
-The extension requires the exact printed origin: scheme and host only, with no path, query, credentials, or fragment. If the operator later configures a Cloudflare custom domain, use its HTTPS origin instead.
+The extension requires the exact printed origin: scheme and host only, with no path, query, credentials, or fragment. If you configure a Cloudflare custom domain, use its HTTPS origin instead.
 
 ## Configure the extension
 
@@ -132,8 +132,6 @@ For extension development, run `npm install` and `npm run dev` from the reposito
 - Once a host has joined, its disconnection starts a one-minute grace period; the room is deleted if the host does not return.
 - Application cleanup does not define Cloudflare's retention for logs, metrics, backups, abuse records, or account data.
 
-## Operator responsibilities
+## Shut down your server
 
-The operator controls the Cloudflare account, deployment origin, origin policy, access to logs and metrics, custom domains, updates, incident response, and deletion of the Worker. The operator should monitor Cloudflare usage and limits, keep Wrangler and application dependencies updated, restrict account access, review Cloudflare data-location and retention settings, disclose the operator and hosting provider to participants, and publish any required privacy or retention terms.
-
-Uninstalling the browser extension does not delete the Worker. To end the service, the operator must remove the Cloudflare deployment and review any remaining platform data in the Cloudflare account. See [privacy](privacy.md), [compliance](compliance.md), and [security reporting](../SECURITY.md).
+To stop hosting, remove the Worker from your Cloudflare account and review any remaining platform data. Uninstalling the extension leaves the Worker running. See [security reporting](../SECURITY.md).

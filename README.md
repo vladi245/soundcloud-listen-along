@@ -50,7 +50,7 @@ npm run check        # format, lint, types and tests
 npm run build:all    # production builds in .output/
 ```
 
-The room server is a Cloudflare Worker with one Durable Object per room. Run it locally with `npm --prefix server run dev`, deploy your own with the [deployment guide](docs/deployment.md), and release with `npm run release:hosted`. See also the [architecture](docs/architecture.md) and [contributing guide](CONTRIBUTING.md).
+The room server is a Cloudflare Worker with one Durable Object per room. Run it locally with `npm --prefix server run dev`, deploy your own with the [deployment guide](docs/deployment.md), and release with `npm run release:hosted`. See also the [architecture](docs/architecture.md).
 
 ## License
 

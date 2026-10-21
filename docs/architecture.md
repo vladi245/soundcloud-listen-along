@@ -60,4 +60,4 @@ Cloudflare platform logs, metrics, and account retention are outside the applica
 
 ## Deployment model
 
-The maintainer operates the public room server that the extension uses by default, and serves signed Firefox packages and the Chromium package from it. Anyone can instead deploy the same Worker to their own Cloudflare account and use it from the popup. There is no account system, room directory, or analytics endpoint. See [deployment](deployment.md), [privacy](privacy.md), and [compliance](compliance.md).
+The default public room server also serves signed Firefox packages and the Chromium package. To use your own server, deploy the Worker to your Cloudflare account and select it in the popup. There is no account system, room directory, or analytics endpoint. See [deployment](deployment.md) and [privacy](privacy.md).
