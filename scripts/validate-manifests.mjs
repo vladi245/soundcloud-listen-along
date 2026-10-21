@@ -51,12 +51,7 @@ assert(
   sameValues(
     firefox.browser_specific_settings?.gecko?.data_collection_permissions
       ?.required,
-    [
-      'authenticationInfo',
-      'browsingActivity',
-      'personallyIdentifyingInfo',
-      'websiteActivity',
-    ],
+    ['browsingActivity', 'websiteActivity'],
   ),
   'Firefox data declarations are incomplete',
 );
