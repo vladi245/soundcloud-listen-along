@@ -329,6 +329,19 @@ input#room-code {
   font-size: 12px;
 }
 
+.now {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 10px;
+  border-left: 3px solid var(--orange);
+}
+
+.now-title {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
 /* Session status */
 
 .status {

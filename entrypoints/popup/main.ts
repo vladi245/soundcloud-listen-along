@@ -14,6 +14,7 @@ import {
   type RuntimeResponse,
 } from '@/lib/messages';
 import { normalizeRoomCode } from '@/lib/protocol';
+import { describeTrack } from '@/lib/track';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 let currentState: ExtensionState = { status: 'idle', participantCount: 0 };
@@ -397,10 +398,12 @@ function renderSession(): void {
     idle: 'Not connected',
   }[currentState.status];
   const hosting = currentState.role === 'host';
+  const track = describeTrack(currentState.trackUrl);
   app.innerHTML = shell(`
     <div class="status is-${currentState.status}"><span class="dot"></span>${statusText}<span class="count" id="participants"></span></div>
     <h1 class="title">${hosting ? 'Your room' : 'Listening along'}</h1>
     <p class="lead">${hosting ? 'Play anything on SoundCloud in this tab. Everyone in the room follows.' : 'Playback follows the host. You can keep this tab in the background.'}</p>
+    ${track ? '<div class="now"><span class="label">Now playing</span><span class="now-title"></span><span class="sub now-artist"></span></div>' : ''}
     <div class="code-box">
       <span class="label">Room code</span>
       <span id="room-code" class="code"></span>
@@ -413,6 +416,10 @@ function renderSession(): void {
   document.querySelector('#room-code')!.textContent = formatRoomCode(
     currentState.roomCode ?? '',
   );
+  if (track) {
+    document.querySelector('.now-title')!.textContent = track.title;
+    document.querySelector('.now-artist')!.textContent = track.artist;
+  }
   document.querySelector('#role')!.textContent = hosting
     ? 'You are the host'
     : 'The host controls playback';

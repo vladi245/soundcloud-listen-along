@@ -16,6 +16,8 @@ export interface ExtensionState {
   participantCount: number;
   error?: string;
   autoplayBlocked?: boolean;
+  trackUrl?: string;
+  inThisTab?: boolean;
 }
 
 export type RuntimeMessage =
@@ -60,7 +62,8 @@ export type RuntimeMessage =
       tabId: number;
       roomCode: string;
     }
-  | { namespace: typeof MESSAGE_NAMESPACE; type: 'leave-room' };
+  | { namespace: typeof MESSAGE_NAMESPACE; type: 'leave-room' }
+  | { namespace: typeof MESSAGE_NAMESPACE; type: 'resync' };
 
 export interface RuntimeResponse {
   ok: boolean;
@@ -84,6 +87,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'content-ready':
     case 'get-state':
     case 'leave-room':
+    case 'resync':
       return true;
     case 'local-playback':
     case 'apply-playback':
