@@ -3,6 +3,9 @@ import { isPlaybackState, isRoomCode } from './protocol';
 
 export const MESSAGE_NAMESPACE = 'soundcloud-listen-along';
 
+export type PlayerIssue =
+  'player_unavailable' | 'autoplay_blocked' | 'ad_playing';
+
 export interface ExtensionState {
   backendUrl?: string;
   hasCreationKey?: boolean;
@@ -18,6 +21,9 @@ export interface ExtensionState {
   autoplayBlocked?: boolean;
   trackUrl?: string;
   inThisTab?: boolean;
+  playerIssue?: PlayerIssue;
+  hostConnected?: boolean;
+  ended?: string;
 }
 
 export type RuntimeMessage =
@@ -30,7 +36,7 @@ export type RuntimeMessage =
   | {
       namespace: typeof MESSAGE_NAMESPACE;
       type: 'player-error';
-      code: 'player_unavailable' | 'autoplay_blocked';
+      code: PlayerIssue;
     }
   | {
       namespace: typeof MESSAGE_NAMESPACE;
@@ -63,7 +69,8 @@ export type RuntimeMessage =
       roomCode: string;
     }
   | { namespace: typeof MESSAGE_NAMESPACE; type: 'leave-room' }
-  | { namespace: typeof MESSAGE_NAMESPACE; type: 'resync' };
+  | { namespace: typeof MESSAGE_NAMESPACE; type: 'resync' }
+  | { namespace: typeof MESSAGE_NAMESPACE; type: 'dismiss-notice' };
 
 export interface RuntimeResponse {
   ok: boolean;
@@ -88,13 +95,16 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'get-state':
     case 'leave-room':
     case 'resync':
+    case 'dismiss-notice':
       return true;
     case 'local-playback':
     case 'apply-playback':
       return isPlaybackState(value.state);
     case 'player-error':
       return (
-        value.code === 'player_unavailable' || value.code === 'autoplay_blocked'
+        value.code === 'player_unavailable' ||
+        value.code === 'autoplay_blocked' ||
+        value.code === 'ad_playing'
       );
     case 'configure-backend':
       return (

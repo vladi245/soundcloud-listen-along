@@ -130,4 +130,55 @@ describe('room service', () => {
     expect((await consume()).status).toBe(204);
     expect((await consume()).status).toBe(429);
   });
+
+  it('tells guests when the host leaves', async () => {
+    const created = await SELF.fetch('https://rooms.example/rooms', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer integration-test-key' },
+    });
+    const { roomCode, hostToken } = await created.json<{
+      roomCode: string;
+      hostToken: string;
+    }>();
+    const join = async (participantId: string, token?: string) => {
+      const response = await SELF.fetch(
+        `https://rooms.example/rooms/${roomCode}/socket`,
+        { headers: { Upgrade: 'websocket' } },
+      );
+      const socket = response.webSocket!;
+      socket.accept();
+      const messages: { type: string; [key: string]: unknown }[] = [];
+      socket.addEventListener('message', (event) => {
+        messages.push(JSON.parse(event.data as string));
+      });
+      socket.send(
+        JSON.stringify({
+          type: 'join',
+          version: 1,
+          roomCode,
+          participantId,
+          ...(token ? { hostToken: token } : {}),
+        }),
+      );
+      return { socket, messages };
+    };
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 100));
+
+    const host = await join('host-participant-0001', hostToken);
+    await settle();
+    const guest = await join('guest-participant-001');
+    await settle();
+    expect(guest.messages).toContainEqual(
+      expect.objectContaining({ type: 'presence', hostConnected: true }),
+    );
+
+    host.socket.send(JSON.stringify({ type: 'leave' }));
+    await settle();
+    expect(guest.messages).toContainEqual({
+      type: 'room-closed',
+      reason: 'host_left',
+    });
+    const after = await SELF.fetch(`https://rooms.example/rooms/${roomCode}`);
+    expect(after.status).toBe(404);
+  });
 });

@@ -624,7 +624,11 @@ export class Room implements DurableObject {
       serverTime: Date.now(),
       ...(room.snapshot ? { state: room.snapshot } : {}),
     });
-    this.broadcast({ type: 'presence', participantCount });
+    this.broadcast({
+      type: 'presence',
+      participantCount,
+      hostConnected: this.hasJoinedHost(),
+    });
   }
 
   private async handleJoinedMessage(
@@ -647,6 +651,12 @@ export class Room implements DurableObject {
       return;
     }
     if (message.type === 'leave') {
+      // A host leaving on purpose ends the room instead of waiting out the
+      // reconnect grace period.
+      if (attachment.role === 'host') {
+        await this.closeRoom('host_left');
+        return;
+      }
       await this.saveRoom(room);
       ws.close(1000, 'Left room');
       return;
@@ -687,6 +697,7 @@ export class Room implements DurableObject {
     this.broadcast({
       type: 'presence',
       participantCount: this.participantCount(ws),
+      hostConnected: this.hasJoinedHost(ws),
     });
   }
 

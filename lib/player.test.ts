@@ -1,8 +1,10 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import type { PlaybackState } from './protocol';
 import {
   applyPlaybackState,
   canonicalTrackUrl,
+  isAdPlaying,
   readPlaybackState,
   trackPageUrl,
 } from './player';
@@ -80,5 +82,22 @@ describe('SoundCloud player adapter', () => {
     await expect(
       applyPlaybackState(player, state.trackUrl, state, 1_000),
     ).resolves.toEqual({ autoplayBlocked: true });
+  });
+
+  it('recognizes an ad in the bottom player', () => {
+    const page = (html: string) =>
+      new DOMParser().parseFromString(
+        `<div class="playControls">${html}</div>`,
+        'text/html',
+      );
+    expect(isAdPlaying(page('<span>Advertisement</span>'))).toBe(true);
+    expect(
+      isAdPlaying(page('<div class="playbackSoundBadge__ad"></div>')),
+    ).toBe(true);
+    expect(
+      isAdPlaying(
+        page('<a class="playbackSoundBadge__titleLink" href="/a/b">Adele</a>'),
+      ),
+    ).toBe(false);
   });
 });
