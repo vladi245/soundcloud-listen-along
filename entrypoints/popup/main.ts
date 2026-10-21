@@ -169,14 +169,9 @@ function renderBackendForm(mode: SetupMode, error?: string): void {
       let granted: boolean;
       let alreadyGranted: boolean;
       try {
-        alreadyGranted = await browser.permissions.contains({
-          origins: [backendPermission(backendUrl)],
-        });
-        granted =
-          alreadyGranted ||
-          (await browser.permissions.request({
-            origins: [backendPermission(backendUrl)],
-          }));
+        [alreadyGranted, granted] = await requestOrigin(
+          backendPermission(backendUrl),
+        );
       } catch {
         notice.textContent = 'This backend origin cannot be permitted.';
         return;
@@ -331,12 +326,7 @@ function renderInvite(invite: RoomInvite): void {
       let alreadyGranted: boolean;
       let granted: boolean;
       try {
-        alreadyGranted = await browser.permissions.contains({
-          origins: [permission],
-        });
-        granted =
-          alreadyGranted ||
-          (await browser.permissions.request({ origins: [permission] }));
+        [alreadyGranted, granted] = await requestOrigin(permission);
       } catch {
         notice.textContent = 'This invitation backend cannot be permitted.';
         return;
@@ -418,6 +408,15 @@ function renderMembers(): void {
     }
     list.append(item);
   }
+}
+
+// Firefox only shows a permission prompt while handling the user's click,
+// so start the request before awaiting anything. It resolves immediately
+// when access was already granted.
+function requestOrigin(origin: string): Promise<[boolean, boolean]> {
+  const contains = browser.permissions.contains({ origins: [origin] });
+  const request = browser.permissions.request({ origins: [origin] });
+  return Promise.all([contains, request]);
 }
 
 function formatRoomCode(value: string): string {
