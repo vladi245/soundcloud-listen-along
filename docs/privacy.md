@@ -23,6 +23,7 @@ Visiting SoundCloud remains subject to SoundCloud's own data practices. The brow
 The extension stores in persistent browser extension storage:
 
 - the selected backend URL;
+- the nickname the user sets, if any;
 - the room capacity reported by that backend;
 - the operator-provided room creation key only when the user explicitly chooses to remember it on that device.
 
@@ -39,6 +40,7 @@ The extension/backend protocol processes:
 
 - room identifier and host authority token;
 - ephemeral participant identifier, presence, and role;
+- the user's nickname, if set, which the server shares with everyone in the room along with each member's role and a random member ID;
 - current SoundCloud page URL;
 - playback state, including playing or paused state and position;
 - event and synchronization timestamps, sequence information, and playback changes such as seek, play, pause, or track change;

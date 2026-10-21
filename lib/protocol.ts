@@ -1,7 +1,14 @@
 export const PROTOCOL_VERSION = 1;
 export const ROOM_CODE_LENGTH = 16;
+export const MAX_NICKNAME_LENGTH = 24;
 
 export type Role = 'host' | 'guest';
+
+export interface Participant {
+  id: string;
+  name: string | null;
+  role: Role;
+}
 
 export interface PlaybackState {
   trackUrl: string;
@@ -18,7 +25,9 @@ export type ClientMessage =
       roomCode: string;
       participantId: string;
       hostToken?: string;
+      name?: string;
     }
+  | { type: 'rename'; name: string | null }
   | { type: 'playback'; state: PlaybackState }
   | { type: 'ping'; sentAt: number }
   | { type: 'leave' };
@@ -30,9 +39,16 @@ export type ServerMessage =
       participantCount: number;
       serverTime: number;
       state?: PlaybackState;
+      memberId?: string;
+      participants?: Participant[];
     }
   | { type: 'playback'; state: PlaybackState; serverTime: number }
-  | { type: 'presence'; participantCount: number; hostConnected?: boolean }
+  | {
+      type: 'presence';
+      participantCount: number;
+      hostConnected?: boolean;
+      participants?: Participant[];
+    }
   | { type: 'pong'; sentAt: number; serverTime: number }
   | { type: 'error'; code: string; message: string }
   | { type: 'room-closed'; reason: string };
@@ -91,19 +107,53 @@ export function isPlaybackState(value: unknown): value is PlaybackState {
   );
 }
 
+// Display names are free text from other people: strip control and
+// formatting characters, collapse whitespace, and cap the length.
+export function normalizeNickname(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 200) return null;
+  const cleaned = value
+    .normalize('NFC')
+    .replace(/[\p{C}]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  const name = Array.from(cleaned)
+    .slice(0, MAX_NICKNAME_LENGTH)
+    .join('')
+    .trim();
+  return name || null;
+}
+
 export function parseClientMessage(value: unknown): ClientMessage | null {
   if (!isRecord(value) || typeof value.type !== 'string') return null;
 
   if (value.type === 'join') {
+    const name =
+      value.name === undefined ? undefined : normalizeNickname(value.name);
     if (
       value.version !== PROTOCOL_VERSION ||
       !isRoomCode(value.roomCode) ||
       !isOpaqueId(value.participantId) ||
-      (value.hostToken !== undefined && !isOpaqueId(value.hostToken))
+      (value.hostToken !== undefined && !isOpaqueId(value.hostToken)) ||
+      name === null
     ) {
       return null;
     }
-    return value as ClientMessage;
+    return {
+      type: 'join',
+      version: PROTOCOL_VERSION,
+      roomCode: value.roomCode,
+      participantId: value.participantId,
+      ...(value.hostToken !== undefined
+        ? { hostToken: value.hostToken as string }
+        : {}),
+      ...(name ? { name } : {}),
+    };
+  }
+
+  if (value.type === 'rename') {
+    if (value.name === null) return { type: 'rename', name: null };
+    const name = normalizeNickname(value.name);
+    return name ? { type: 'rename', name } : null;
   }
 
   if (value.type === 'playback' && isPlaybackState(value.state)) {
@@ -128,7 +178,17 @@ export function parseServerMessage(value: unknown): ServerMessage | null {
     isNonNegativeFinite(value.serverTime) &&
     (value.state === undefined || isPlaybackState(value.state))
   ) {
-    return value as unknown as ServerMessage;
+    return {
+      type: 'joined',
+      role: value.role,
+      participantCount: value.participantCount,
+      serverTime: value.serverTime,
+      ...(value.state ? { state: value.state as PlaybackState } : {}),
+      ...(isMemberId(value.memberId) ? { memberId: value.memberId } : {}),
+      ...(isParticipantList(value.participants)
+        ? { participants: value.participants }
+        : {}),
+    };
   }
   if (
     value.type === 'playback' &&
@@ -147,6 +207,9 @@ export function parseServerMessage(value: unknown): ServerMessage | null {
       participantCount: value.participantCount,
       ...(typeof value.hostConnected === 'boolean'
         ? { hostConnected: value.hostConnected }
+        : {}),
+      ...(isParticipantList(value.participants)
+        ? { participants: value.participants }
         : {}),
     };
   }
@@ -168,6 +231,24 @@ export function parseServerMessage(value: unknown): ServerMessage | null {
     return { type: 'room-closed', reason: value.reason };
   }
   return null;
+}
+
+export function isMemberId(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9A-HJKMNP-TV-Z]{8}$/.test(value);
+}
+
+function isParticipantList(value: unknown): value is Participant[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= 25 &&
+    value.every(
+      (item) =>
+        isRecord(item) &&
+        isMemberId(item.id) &&
+        (item.role === 'host' || item.role === 'guest') &&
+        (item.name === null || normalizeNickname(item.name) === item.name),
+    )
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

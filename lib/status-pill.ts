@@ -76,6 +76,12 @@ export function createStatusPill(actions: PillActions) {
     const hosting = state.role === 'host';
     const count =
       state.participantCount > 1 ? `${state.participantCount} listening` : '';
+    const names = (state.participants ?? [])
+      .map(
+        (member) =>
+          `${member.name ?? 'Listener'}${member.role === 'host' ? ' (host)' : ''}${member.id === state.memberId ? ' (you)' : ''}`,
+      )
+      .join('\n');
     let tone = state.status;
     let text: string;
     let detail = '';
@@ -127,6 +133,7 @@ export function createStatusPill(actions: PillActions) {
       text,
       detail,
       count,
+      names,
       primary?.label,
       leave,
       pageIsDark(),
@@ -144,7 +151,10 @@ export function createStatusPill(actions: PillActions) {
     shadow.querySelector('.text')!.textContent = text;
     if (detail) shadow.querySelector('.pill')!.setAttribute('title', detail);
     const countElement = shadow.querySelector('.count');
-    if (countElement) countElement.textContent = count;
+    if (countElement) {
+      countElement.textContent = count;
+      if (names) countElement.setAttribute('title', names);
+    }
     const button = shadow.querySelector<HTMLButtonElement>('.primary');
     if (button && primary) {
       button.textContent = primary.label;

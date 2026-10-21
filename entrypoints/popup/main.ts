@@ -227,6 +227,7 @@ function renderLobby(): void {
         : `<p class="lead">Rooms follow the SoundCloud tab you start them from.</p>
            <button id="open-soundcloud" class="btn btn-secondary" type="button">Open SoundCloud</button>`
     }
+    ${nicknameField()}
     ${canHost && !invited ? `<button id="create" class="btn btn-primary" type="button" ${onSoundCloud ? '' : 'disabled'}>Start a room</button>` : ''}
     <form id="join-form" class="form">
       <label for="room-code">${invited ? 'Room code' : 'Have a room code?'}</label>
@@ -311,6 +312,7 @@ function renderInvite(invite: RoomInvite): void {
       <span id="invite-room" class="code"></span>
       <span id="invite-backend" class="sub"></span>
     </div>
+    ${nicknameField()}
     <button id="accept-invite" class="btn btn-primary" type="button">Join room</button>
     ${transmissionNotice('Joining')}
     <p id="notice" class="notice" role="status"></p>
@@ -373,6 +375,51 @@ async function copyInvite(): Promise<boolean> {
   }
 }
 
+function nicknameField(): string {
+  return `<label class="name-field">
+    <span>Your nickname</span>
+    <input id="nickname" maxlength="24" placeholder="Listener" autocomplete="nickname" spellcheck="false">
+  </label>`;
+}
+
+// Called after each render that includes the nickname field.
+function bindNickname(): void {
+  const input = document.querySelector<HTMLInputElement>('#nickname');
+  if (!input) return;
+  input.value = currentState.nickname ?? '';
+  input.addEventListener('change', async () => {
+    const response = await send({ type: 'set-nickname', name: input.value });
+    currentState = response.state;
+    input.value = currentState.nickname ?? '';
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') input.blur();
+  });
+}
+
+function renderMembers(): void {
+  const list = document.querySelector('#members');
+  if (!list) return;
+  for (const member of currentState.participants ?? []) {
+    const item = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = member.name ?? 'Listener';
+    if (!member.name) name.className = 'unnamed';
+    item.append(name);
+    const tags = [
+      member.role === 'host' ? 'Host' : '',
+      member.id === currentState.memberId ? 'you' : '',
+    ].filter(Boolean);
+    if (tags.length) {
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = tags.join(' · ');
+      item.append(tag);
+    }
+    list.append(item);
+  }
+}
+
 function formatRoomCode(value: string): string {
   return value.match(/.{1,4}/g)?.join('-') ?? value;
 }
@@ -397,6 +444,11 @@ function renderSession(): void {
       <span id="role" class="sub"></span>
     </div>
     <button id="copy-code" class="btn btn-primary" type="button">Copy invite link</button>
+    <div class="members">
+      <span class="label">In this room</span>
+      <ul id="members"></ul>
+    </div>
+    ${nicknameField()}
     <p id="notice" class="notice" role="status"></p>
     <button id="leave" class="btn btn-secondary" type="button">Leave room</button>
   `);
@@ -443,9 +495,11 @@ function render(): void {
     renderStart(currentState.error);
   } else if (currentState.roomCode) {
     renderSession();
+    renderMembers();
   } else {
     renderLobby();
   }
+  bindNickname();
 }
 
 // Unpacked Chromium installs never update themselves, so tell the user when
@@ -482,6 +536,8 @@ async function refresh(): Promise<void> {
     ]);
     activeInvite = tab.invite;
     onSoundCloud = tab.soundCloud;
+    // Re-rendering while the nickname field is focused would discard typing.
+    if (document.activeElement?.id === 'nickname') return;
     render();
   } catch {
     renderStart('Extension background is unavailable.');

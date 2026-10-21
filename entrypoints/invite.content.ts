@@ -11,7 +11,20 @@ export default defineContentScript({
     const join = document.querySelector<HTMLElement>('#join');
     const button = document.querySelector<HTMLButtonElement>('#join-button');
     const status = document.querySelector<HTMLElement>('#join-status');
+    const nameInput = document.querySelector<HTMLInputElement>('#join-name');
     if (!join || !button || !status) return;
+
+    void (
+      browser.runtime.sendMessage(
+        message({ type: 'get-state' }),
+      ) as Promise<RuntimeResponse>
+    )
+      .then((response) => {
+        if (nameInput && !nameInput.value) {
+          nameInput.value = response.state.nickname ?? '';
+        }
+      })
+      .catch(() => undefined);
 
     const show = () => {
       const invite = parseRoomInvite(location.href);
@@ -27,6 +40,11 @@ export default defineContentScript({
       button.disabled = true;
       status.textContent = 'Joining…';
       try {
+        if (nameInput) {
+          await browser.runtime.sendMessage(
+            message({ type: 'set-nickname', name: nameInput.value }),
+          );
+        }
         const response = (await browser.runtime.sendMessage(
           message({
             type: 'configure-invite',

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isPlaybackState,
+  normalizeNickname,
   isSoundCloudUrl,
   normalizeRoomCode,
   parseClientMessage,
@@ -72,5 +73,13 @@ describe('protocol validation', () => {
     expect(
       parseServerMessage({ type: 'presence', participantCount: 26 }),
     ).toBeNull();
+  });
+
+  it('cleans nicknames', () => {
+    expect(normalizeNickname('  Sam \n  Smith ')).toBe('Sam Smith');
+    expect(normalizeNickname('a\u200Bb')).toBe('ab');
+    expect(normalizeNickname('x'.repeat(40))).toHaveLength(24);
+    expect(normalizeNickname('   ')).toBeNull();
+    expect(normalizeNickname(42)).toBeNull();
   });
 });
