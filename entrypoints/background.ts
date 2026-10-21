@@ -169,6 +169,7 @@ export default defineBackground(() => {
           ...incoming.state,
           capturedAt: incoming.state.capturedAt - session.serverOffset,
         };
+        session.public.trackUrl = incoming.state.trackUrl;
       }
       await save();
       if (incoming.role === 'guest' && session.lastPlayback) {
@@ -181,6 +182,7 @@ export default defineBackground(() => {
         ...incoming.state,
         capturedAt: incoming.state.capturedAt - session.serverOffset,
       };
+      session.public.trackUrl = incoming.state.trackUrl;
       await save();
       if (session.public.role === 'guest')
         await sendToTab(session.lastPlayback);
@@ -317,7 +319,9 @@ export default defineBackground(() => {
 
     try {
       if (request.type === 'get-state') {
-        return { ok: true, state: session.public };
+        const inThisTab =
+          sender.tab?.id !== undefined && sender.tab.id === session.tabId;
+        return { ok: true, state: { ...session.public, inThisTab } };
       }
       if (request.type === 'configure-backend') {
         const backendUrl = normalizeBackendUrl(request.backendUrl);
@@ -442,11 +446,30 @@ export default defineBackground(() => {
             await sendToTab(session.lastPlayback);
           }
         }
+      } else if (request.type === 'resync') {
+        if (
+          sender.tab?.id === session.tabId &&
+          session.public.role === 'guest' &&
+          session.lastPlayback
+        ) {
+          await sendToTab(session.lastPlayback);
+        }
       } else if (request.type === 'local-playback') {
+        if (
+          sender.tab?.id === session.tabId &&
+          session.public.role === 'guest' &&
+          request.state.playing &&
+          (session.public.autoplayBlocked || session.public.error)
+        ) {
+          await setPublic({ autoplayBlocked: false, error: undefined });
+        }
         if (
           sender.tab?.id === session.tabId &&
           session.public.role === 'host'
         ) {
+          if (session.public.trackUrl !== request.state.trackUrl) {
+            await setPublic({ trackUrl: request.state.trackUrl });
+          }
           await connect();
           if (socket?.readyState === WebSocket.OPEN) {
             socket.send(

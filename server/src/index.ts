@@ -75,28 +75,48 @@ const landingPage = `<!doctype html>
   <meta name="color-scheme" content="light dark">
   <title>Listen Along invitation</title>
   <link rel="stylesheet" href="/landing.css">
+  <script src="/landing.js" defer></script>
 </head>
 <body>
   <main>
     <p class="brand"><span class="mark" aria-hidden="true"></span>Listen Along</p>
-    <h1>You're invited to listen together</h1>
+    <h1 data-view="invite">You're invited to listen together</h1>
+    <h1 data-view="home" hidden>Listen to SoundCloud together</h1>
+    <p data-view="home" class="intro" hidden>Start a room from any SoundCloud track and share the link. Everyone in the room hears what you play, in sync.</p>
     <div id="join" hidden>
       <button id="join-button" type="button">Join room</button>
       <p id="join-status" class="status" role="status"></p>
       <p class="fine">Joining shares the current track link and playback position with the room server while you are connected.</p>
     </div>
     <div id="steps">
-      <h2>1. Install the extension</h2>
-      {{INSTALL}}
-      <h2>2. Come back to this page</h2>
-      <p>A <b>Join room</b> button appears here once the extension is installed. SoundCloud then opens and follows the host.</p>
+      <div class="needs-install">
+        <h2>1. Install the extension</h2>
+        {{INSTALL}}
+        <h2 data-view="invite">2. Come back to this page</h2>
+        <p data-view="invite">A <b>Join room</b> button appears here once the extension is installed. SoundCloud then opens and follows the host.</p>
+        <h2 data-view="home" hidden>2. Start a room</h2>
+        <p data-view="home" hidden>Open a track on SoundCloud, click the extension in your toolbar and select <b>Start a room</b>. The invite link is copied for you.</p>
+      </div>
+      <div class="has-extension" data-view="home" hidden>
+        <p>The extension is installed. Open a track, click the extension in your toolbar and select <b>Start a room</b>.</p>
+        <p><a class="button" href="https://soundcloud.com/">Open SoundCloud</a></p>
+      </div>
     </div>
     <p class="fine">Audio plays from SoundCloud. The room code stays in this link and is not sent to the server by this page. Unofficial extension, not affiliated with SoundCloud.</p>
   </main>
 </body>
 </html>`;
 
-const landingCss = `:root{--orange:#f50;--bg:#fff;--text:#333;--muted:#999;--line:#e5e5e5;color:var(--text);background:var(--bg);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}@media (prefers-color-scheme:dark){:root{--bg:#121212;--text:#f2f2f2;--muted:#8c8c8c;--line:#2b2b2b}}body{margin:0;min-height:100vh;display:grid;place-items:center}main{box-sizing:border-box;width:min(480px,calc(100% - 32px));padding:32px 0}.brand{display:flex;align-items:center;gap:8px;margin:0 0 24px;font-weight:600}.mark{width:16px;height:16px;border-radius:3px;background:var(--orange)}h1{margin:0 0 20px;font-size:24px;font-weight:600;line-height:1.3}h2{margin:20px 0 8px;font-size:15px;font-weight:600}p{margin:0}.button{display:inline-block;height:40px;padding:0 24px;border-radius:3px;color:#fff;background:var(--orange);font-weight:600;line-height:40px;text-decoration:none}.button:hover{background:#e64d00}details{margin-top:12px;color:var(--muted);font-size:14px}summary{cursor:pointer}details ol{margin-top:8px;color:var(--text)}code{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}ol{margin:0;padding-left:20px}li{margin:6px 0}a{color:var(--orange)}.fine{margin:24px 0 0;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}`;
+// Shows the home or invitation copy. The room code stays in the fragment.
+const landingJs = `const invite = new URLSearchParams(location.hash.slice(1)).has('join');
+for (const element of document.querySelectorAll('[data-view]')) {
+  element.hidden = element.dataset.view !== (invite ? 'invite' : 'home');
+}
+if (!invite) document.title = 'Listen Along';
+addEventListener('hashchange', () => location.reload());
+`;
+
+const landingCss = `:root{--orange:#f50;--bg:#fff;--text:#333;--muted:#999;--line:#e5e5e5;color:var(--text);background:var(--bg);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}@media (prefers-color-scheme:dark){:root{--bg:#121212;--text:#f2f2f2;--muted:#8c8c8c;--line:#2b2b2b}}body{margin:0;min-height:100vh;display:grid;place-items:center}main{box-sizing:border-box;width:min(480px,calc(100% - 32px));padding:32px 0}.brand{display:flex;align-items:center;gap:8px;margin:0 0 24px;font-weight:600}.mark{width:16px;height:16px;border-radius:3px;background:var(--orange)}h1{margin:0 0 20px;font-size:24px;font-weight:600;line-height:1.3}h2{margin:20px 0 8px;font-size:15px;font-weight:600}[hidden]{display:none!important}.intro{margin:-8px 0 8px;color:var(--muted)}.has-extension{display:none}[data-extension] .has-extension{display:block}[data-extension] .needs-install{display:none}.has-extension p+p{margin-top:16px}p{margin:0}.button{display:inline-block;height:40px;padding:0 24px;border-radius:3px;color:#fff;background:var(--orange);font-weight:600;line-height:40px;text-decoration:none}.button:hover{background:#e64d00}details{margin-top:12px;color:var(--muted);font-size:14px}summary{cursor:pointer}details ol{margin-top:8px;color:var(--text)}code{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}ol{margin:0;padding-left:20px}li{margin:6px 0}a{color:var(--orange)}.fine{margin:24px 0 0;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}`;
 
 export function createRoomCode(random: Uint8Array): string {
   if (random.length !== ROOM_CODE_LENGTH) {
@@ -180,6 +200,11 @@ export default {
         await renderLandingPage(env),
         'text/html; charset=utf-8',
       );
+    }
+
+    if (url.pathname === '/landing.js') {
+      if (request.method !== 'GET') return methodNotAllowed('GET', origin);
+      return documentResponse(landingJs, 'text/javascript; charset=utf-8');
     }
 
     if (url.pathname === '/landing.css') {
@@ -1018,7 +1043,7 @@ function documentResponse(body: string, contentType: string): Response {
     headers: {
       ...securityHeaders,
       'Content-Security-Policy':
-        "default-src 'none'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+        "default-src 'none'; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
       'Content-Type': contentType,
     },
   });

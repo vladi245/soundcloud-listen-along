@@ -4,7 +4,13 @@ import {
   type ExtensionMessage,
   type MediaSnapshot,
 } from '@/lib/bridge';
-import { message, isRuntimeMessage } from '@/lib/messages';
+import { createRoomInvite } from '@/lib/backend';
+import {
+  message,
+  isRuntimeMessage,
+  type ExtensionState,
+  type RuntimeResponse,
+} from '@/lib/messages';
 import {
   activatePageTrack,
   activeTrackUrl,
@@ -12,6 +18,7 @@ import {
   trackPageUrl,
 } from '@/lib/player';
 import type { PlaybackState } from '@/lib/protocol';
+import { createStatusPill } from '@/lib/status-pill';
 
 export default defineContentScript({
   matches: ['https://soundcloud.com/*', 'https://*.soundcloud.com/*'],
@@ -152,6 +159,40 @@ export default defineContentScript({
       latestRemote = request.state;
       void syncToRemote();
     });
+
+    let roomState: ExtensionState | null = null;
+    const send = (request: Parameters<typeof message>[0]) =>
+      browser.runtime
+        .sendMessage(message(request))
+        .then((response) => response as RuntimeResponse)
+        .catch(() => null);
+    const pill = createStatusPill({
+      // The click itself counts as user activation, so playback is allowed.
+      start: () => void send({ type: 'resync' }),
+      copyInvite: async () => {
+        if (!roomState?.backendUrl || !roomState.roomCode) return false;
+        try {
+          await navigator.clipboard.writeText(
+            createRoomInvite(roomState.backendUrl, roomState.roomCode),
+          );
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      leave: () =>
+        void send({ type: 'leave-room' }).then((response) => {
+          if (response) pill.render(response.state);
+        }),
+    });
+    const refreshPill = async () => {
+      const response = await send({ type: 'get-state' });
+      if (!response) return;
+      roomState = response.state;
+      pill.render(response.state);
+    };
+    setInterval(() => void refreshPill(), 1_500);
+    void refreshPill();
 
     setInterval(publishState, 2_000);
     void browser.runtime

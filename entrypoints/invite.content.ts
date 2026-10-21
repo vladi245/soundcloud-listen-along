@@ -7,6 +7,7 @@ import { message, type RuntimeResponse } from '@/lib/messages';
 export default defineContentScript({
   matches: HOSTED_BACKEND_URL ? [`${HOSTED_BACKEND_URL}/*`] : [],
   main() {
+    document.documentElement.dataset.extension = 'installed';
     const join = document.querySelector<HTMLElement>('#join');
     const button = document.querySelector<HTMLButtonElement>('#join-button');
     const status = document.querySelector<HTMLElement>('#join-status');
