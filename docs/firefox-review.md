@@ -28,7 +28,7 @@ The unpacked build is written to `.output/firefox-mv3/`; the zip command writes 
 - Analytics or advertising: none in project source
 - Backend communication: HTTPS room creation and WSS room synchronization
 
-The manifest requires Firefox 140 or newer and declares `authenticationInfo`, `browsingActivity`, `personallyIdentifyingInfo`, and `websiteActivity`. These cover the host token, track URL, ephemeral room identifiers, and playback actions required by synchronization.
+The manifest requires Firefox 140 or newer and declares `browsingActivity` and `websiteActivity`. These cover the SoundCloud track URL and the playback actions (play, pause, position, and seeks) sent to the room server while the user is in a room. Room codes and host tokens are short-lived room credentials issued by that server, not account logins, and the extension handles no names, email addresses, or other personal identifiers.
 
 ## Planned submission checklist
 

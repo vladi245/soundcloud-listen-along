@@ -25,12 +25,7 @@ export default defineConfig({
           ? { update_url: `${HOSTED_BACKEND_URL}/updates.json` }
           : {}),
         data_collection_permissions: {
-          required: [
-            'authenticationInfo',
-            'browsingActivity',
-            'personallyIdentifyingInfo',
-            'websiteActivity',
-          ],
+          required: ['browsingActivity', 'websiteActivity'],
         },
       },
     },

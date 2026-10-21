@@ -2,7 +2,7 @@
   "name": "soundcloud-listen-along",
   "description": "An unofficial, self-hosted listen-along extension for SoundCloud.",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "engines": {
     "node": ">=22"
