@@ -112,15 +112,15 @@ function renderBackendForm(mode: SetupMode, error?: string): void {
   app.innerHTML = shell(`
     <button id="setup-back" class="link back" type="button">Back</button>
     <h1 class="title">${hosting ? 'Your room server' : "Host's room server"}</h1>
-    <p class="lead">${hosting ? 'Enter your server address and room creation key.' : 'Paste the server address the host gave you.'}</p>
+    <p class="lead">${hosting ? 'Enter your server address, and its room creation key if it has one.' : 'Paste the server address the host gave you.'}</p>
     ${hosting ? '<a class="link" href="https://github.com/vladi245/soundcloud-listen-along/blob/main/docs/deployment.md#self-hosted-deployment" target="_blank" rel="noreferrer">How to run your own server</a>' : ''}
     <form id="backend-form" class="form">
       <label for="backend">Server address</label>
       <input id="backend" name="backend" type="url" placeholder="https://rooms.example.workers.dev" autocomplete="url" required>
       ${
         hosting
-          ? `<label for="creation-key">Room creation key</label>
-             <input id="creation-key" name="creation-key" type="password" maxlength="128" autocomplete="off" required>
+          ? `<label for="creation-key">Room creation key <span class="optional">(if your server needs one)</span></label>
+             <input id="creation-key" name="creation-key" type="password" maxlength="128" autocomplete="off">
              <label class="check"><input id="remember-key" type="checkbox"><span>Remember key on this device</span></label>`
           : ''
       }

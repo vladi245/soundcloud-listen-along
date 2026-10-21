@@ -236,6 +236,11 @@ a:focus-visible {
   font-weight: 600;
 }
 
+.form .optional {
+  color: var(--muted);
+  font-weight: 400;
+}
+
 .form label:not(:first-child) {
   margin-top: 4px;
 }
